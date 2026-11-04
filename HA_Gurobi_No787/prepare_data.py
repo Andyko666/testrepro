@@ -235,6 +235,7 @@ def prepare_data(on_time_path, t100_path, cost_path, output_dir):
     if route.candidate_passengers.isna().any() or route.candidate_passengers.le(0).any():
         raise ValueError("Each retained route needs positive candidate-type passengers for cost-penalty calibration.")
     route["cost_recovery_spill_penalty_usd"] = route.candidate_monthly_operating_cost_usd/route.candidate_passengers
+    # Historical baseline before primary/user/CLI demand assumptions are applied.
     route["phi"] = 1.0
     route["penalty_status"] = "CANDIDATE_TYPE_COST_RECOVERY_PROXY_NOT_DB1B_FARE"
     route["demand_time_source"] = "FULL_FOUR_TYPE_HISTORY_INCLUDING_787"
@@ -313,6 +314,7 @@ def prepare_data(on_time_path, t100_path, cost_path, output_dir):
     readme=pd.DataFrame([("Sources","Only supplied on_time.xlsx,t100.xlsx,costs.xlsx; source files unchanged."),
                          ("User scope","Aircraft889is excluded. Only flights with no eligible type among608/696/721are omitted and separately audited; no further cancellations occur in optimization."),
                          ("Observed versus estimated","Aircraft_Inputs and DB1B_Route_Inputs retain missing empirical cells. Estimates are in separate audit tables and generated_parameters.json."),
+                         ("Demand stage","Route_Estimates and generated_parameters.json retain the historical phi=1 baseline before primary/user/CLI assumptions. See the run root calculated_flight_parameters.csv and effective_parameters.json for the actual demand and phi used in optimization."),
                          ("Penalty caveat","Candidate-type cost-recovery penalty is a substitute for missing DB1B fares, not ticket prices or lost revenue. No787cost is imputed."),
                          ("Demand/time source","Use full historical route passengers and airborne hours, including787records. Excluding an aircraft option does not delete those historical passengers."),
                          ("Tail inference","Infer original206observed tails from all four historical types before filtering the model. Two inferred787tails do not become A330s."),

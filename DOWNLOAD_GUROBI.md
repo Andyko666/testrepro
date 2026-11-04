@@ -20,7 +20,10 @@ On Windows, `py` may replace `python`; on macOS/Linux use `python3` if needed.
 Python3.11/3.12is recommended. A usable Gurobi license applies. The compact
 formulation solved in the size-limited license tested with Gurobi13.0.3.
 
-Recorded actual Gurobi result: USD3,201,237.68,0%gap,31tests passed.
+The selected primary case assumes phi=1.20, with demand 20% above historical
+route-average carried passengers per departure. Actual Gurobi result:
+USD 3,361,858.29 total, USD 160,620.61 spill penalty, 820.36 modeled spilled
+passengers across 54 flights, 0% gap. 39 tests passed. The phi=1 benchmark is retained.
 These are results under explicitly documented estimates, not verified historical
 fare revenue or true lost passengers. Source data, parameter audits, exclusions,
 modelLP, solverlog and result workbooks are included. Read the project README
@@ -38,5 +41,15 @@ python run_sensitivity.py
 
 If you already installed the original package, replace `run_model.py` and add
 `run_sensitivity.py` in your existing folder. Keep your data and Python virtual
-environment. No additional dependencies are required. Default phi=1 is unchanged.
+environment. No additional dependencies are required.
 These are assumption/sensitivity controls, not claims about actual unmet demand.
+
+## Primary phi=1.20 package
+
+Download [the selected primary-case version](downloads/HA_Gurobi_No787_Phi120.zip).
+Its `primary_assumptions.json` automatically applies phi=1.20 in estimated mode;
+`ASSUMPTIONS.md` provides the English assumption statement. Source PASSENGERS
+remain unchanged. Run `python run_model.py` for the main case, or add
+`--demand-multiplier 1.00` for the historical-average benchmark. New actual
+results, including an XLSX with solver summary and assumption sheets, are in
+`HA_Gurobi_No787/validation/primary_phi_1_20/`.

@@ -15,9 +15,9 @@
     "20241016_HA36_HNL_PHX"
   ],
   "actual_gurobi_status": "OPTIMAL_WITHIN_CONFIGURED_TOLERANCE",
-  "actual_gurobi_objective_usd": 3201237.67558547,
+  "actual_gurobi_objective_usd": 3361858.286250919,
   "actual_gurobi_gap": 0.0,
-  "tests_passed": 36,
+  "tests_passed": 39,
   "demand_controls": {
     "uniform_cli": "--demand-multiplier",
     "comparison_script": "run_sensitivity.py",
@@ -30,5 +30,11 @@
     "all_actual_gurobi_runs_optimal": true,
     "comparison": "validation/demand_sensitivity/Demand_Sensitivity.xlsx",
     "interpretation": "Demand stress scenarios, not measured unmet demand."
-  }
+  },
+  "primary_demand_phi": 1.2,
+  "primary_assumptions_file": "primary_assumptions.json",
+  "estimated_spilled_passengers": 820.3597309070067,
+  "flights_with_spill": 54,
+  "primary_evidence": "validation/primary_phi_1_20/",
+  "baseline_evidence": "validation/no787_gurobi/"
 }

@@ -21,6 +21,7 @@ from prepare_data import prepare_data
 from gurobi_model import TYPES, FARE_COLUMN, MissingInputs, prepare_inputs, solve_gurobi
 
 ROOT = Path(__file__).resolve().parent
+PRIMARY_ASSUMPTIONS = ROOT / "primary_assumptions.json"
 ALLOWED_PARAMETERS = {"turnaround_minutes", "available_fleet", "cost_per_airborne_hour_overrides",
                       "fare_proxy", "demand_adjustment", "route_demand_multipliers",
                       "route_spill_penalty_estimates", "estimation_metadata"}
@@ -112,6 +113,13 @@ def write_report(output, preparation, result, mode):
              "The PDF content is the complete Milestone4 model, although the attachment filename says Milestone3.",
              "At the user's request, candidate type889is excluded. Flights with no remaining historically eligible type are explicitly listed outside this run's model scope; other flights are retained.",
              f"Input mode: **{mode}**. Source and estimate audits are in `prepared/`.", ""]
+    if result.get("primary_assumptions_applied"):
+        lines += ["## Primary demand assumption", "",
+                  "The user-selected primary case assumes demand is 20% above the historical directional-route average carried passengers per departure: "
+                  "q_f = 1.20 * sum_route(PASSENGERS) / sum_route(DEPARTURES_PERFORMED). "
+                  "This is a documented modeling assumption, not an estimate calibrated from observed unmet demand. "
+                  "Raw passenger records remain unchanged. Explicit JSON or CLI overrides can replace this primary assumption; "
+                  "the effective phi range below is authoritative.", ""]
     if "objective_usd" in result:
         lines += ["| Metric | Value |", "|---|---:|",
                   f"| Objective | USD {result['objective_usd']:,.2f} |",
@@ -146,6 +154,32 @@ def write_report(output, preparation, result, mode):
               "Default compact mode removes equal ground-inventory variables at non-events and enforces the fleet cap at one time cut per type, since total fleet is conserved by flow. Every returned solution is then checked at ALL common PDF events. Use `--formulation full` for the literal shared-event formulation.",
               "A compact model keeps the same optimal flight assignments/objective while avoiding unnecessary model size; a size-limited Gurobi license may be sufficient for this dataset. Licensing behavior depends on the installed version and license.", ""]
     (output / "RUN_REPORT.md").write_text("\n".join(lines), encoding="utf-8")
+    result_excel = output / "gurobi_results.xlsx"
+    if result_excel.exists():
+        # Keep the chosen assumption and actual solver status inside the file
+        # users open first, instead of requiring them to infer either from costs.
+        from openpyxl.styles import Font, PatternFill
+        keys = ["status", "gurobi_version", "formulation", "retained_flights", "objective_usd",
+                "operating_cost_usd", "spill_cost_usd", "model_spilled_passengers", "mip_gap",
+                "dual_bound_usd", "runtime_seconds", "primary_assumptions_applied", "primary_assumptions_file"]
+        summary_rows = [(key, result.get(key)) for key in keys]
+        summary_rows += [("minimum_phi", result.get("demand_inputs", {}).get("minimum_phi")),
+                         ("maximum_phi", result.get("demand_inputs", {}).get("maximum_phi"))]
+        assumptions = result.get("parameters", {}).get("estimation_metadata", {})
+        assumption_rows = [(key, str(value)) for key, value in assumptions.items()]
+        assumption_rows += [("Interpretation", "Demand uplift and resulting spill are conditional model estimates, not observed bookings, denied boarding, or actual lost revenue.")]
+        with pd.ExcelWriter(result_excel, engine="openpyxl", mode="a", if_sheet_exists="replace") as writer:
+            for name, frame in {"Run_Summary":pd.DataFrame(summary_rows,columns=["metric","value"]),
+                                "Model_Assumptions":pd.DataFrame(assumption_rows,columns=["assumption","description"])}.items():
+                frame.to_excel(writer,sheet_name=name,index=False)
+                sheet = writer.sheets[name]
+                sheet.freeze_panes = "A2"
+                sheet.column_dimensions["A"].width = 35
+                sheet.column_dimensions["B"].width = 90
+                for row in sheet:
+                    for cell in row:
+                        cell.font = Font(name="Calibri",size=11,color="000000",bold=cell.row==1)
+                        cell.fill = PatternFill(fill_type=None)
 
 
 def main(argv=None):
@@ -170,10 +204,14 @@ def main(argv=None):
         return 1
     output.mkdir(parents=True, exist_ok=True)
     preparation = {}
+    primary_applied = False
     try:
         print("Preparing the supplied three Excel files; originals remain unchanged.", flush=True)
         workbook, generated, preparation = prepare_data(a.on_time, a.t100, a.costs, output / "prepared")
         parameters = json.loads(generated.read_text()) if a.mode == "estimated" else {}
+        if a.mode == "estimated" and PRIMARY_ASSUMPTIONS.exists():
+            parameters = merge_parameters(parameters, json.loads(PRIMARY_ASSUMPTIONS.read_text()))
+            primary_applied = True
         if a.parameters:
             parameters = merge_parameters(parameters, json.loads(a.parameters.read_text()))
         if a.demand_multiplier is not None:
@@ -197,6 +235,8 @@ def main(argv=None):
                              maximum_phi=float(data["flights"].phi.max()),
                              total_estimated_demand=float(data["flights"].demand.sum()),
                              label="Scenario estimate; not observed true unmet demand or overbooking.")
+        print(f"Effective demand phi: {demand_inputs['minimum_phi']:g} to {demand_inputs['maximum_phi']:g}. "
+              "The uplift is a model assumption, not observed unmet demand.", flush=True)
         if data["balance"].net_departures.ne(0).any():
             print("WARNING: cyclic airport balance fails. Increasing aircraft counts cannot fix this scope conflict.", flush=True)
         if a.validate_only:
@@ -204,17 +244,22 @@ def main(argv=None):
         else:
             result = solve_gurobi(data, output, a.time_limit, a.mip_gap)
         result.update(mode=a.mode, preparation=preparation, parameters_file="effective_parameters.json",
+                      primary_assumptions_applied=primary_applied,
+                      primary_assumptions_file=PRIMARY_ASSUMPTIONS.name if primary_applied else None,
+                      primary_assumptions_sha256=hashlib.sha256(PRIMARY_ASSUMPTIONS.read_bytes()).hexdigest() if primary_applied else None,
                       prepared_workbook_sha256=hashlib.sha256(workbook.read_bytes()).hexdigest(),
                       fare_import=fare_import, penalty_inputs=penalty_inputs, demand_inputs=demand_inputs)
         exit_code = 0 if a.validate_only or result.get("solution_count", 0) > 0 else 3
     except MissingInputs as exc:
         pd.DataFrame(exc.missing).to_csv(output / "missing_inputs.csv", index=False)
         result = dict(status="MISSING_INPUTS_NO_OPTIMIZATION", missing_count=len(exc.missing),
-                      message=str(exc), preparation=preparation)
+                      message=str(exc), preparation=preparation, primary_assumptions_applied=primary_applied,
+                      primary_assumptions_file=PRIMARY_ASSUMPTIONS.name if primary_applied else None)
         exit_code = 2
     except Exception as exc:
         result = dict(status="EXECUTION_ERROR_NO_COMPLETED_RESULT", error_type=type(exc).__name__,
-                      message=str(exc), preparation=preparation)
+                      message=str(exc), preparation=preparation, primary_assumptions_applied=primary_applied,
+                      primary_assumptions_file=PRIMARY_ASSUMPTIONS.name if primary_applied else None)
         exit_code = 1
     (output / "run_summary.json").write_text(json.dumps(result, indent=2, allow_nan=False)+"\n")
     write_report(output, preparation, result, a.mode)

@@ -1,0 +1,13 @@
+{
+  "phi": 1.2,
+  "demand_formula": "q_f=1.20*monthly route passengers/performed departures",
+  "objective_usd": 3361858.286250919,
+  "operating_cost_usd": 3201237.67558547,
+  "spill_cost_usd": 160620.61066544853,
+  "estimated_spill": 820.3597309070067,
+  "flights_with_spill": 54,
+  "assignment_changes_vs_phi1": 0,
+  "demand_total": 31186.948538934746,
+  "mip_gap": 0.0,
+  "gurobi_version": "13.0.3"
+}

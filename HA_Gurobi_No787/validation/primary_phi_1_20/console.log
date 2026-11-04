@@ -1,0 +1,47 @@
+Preparing the supplied three Excel files; originals remain unchanged.
+Input mode: estimated. See prepared audits for every observation, estimate and limitation.
+Effective demand phi: 1.2 to 1.2. The uplift is a model assumption, not observed unmet demand.
+Restricted license - for non-production use only - expires 2027-11-29
+Set parameter LogFile to value "/workspace/HA_Primary_Phi120_Run/gurobi.log"
+Set parameter TimeLimit to value 300
+Set parameter MIPGap to value 0.0001
+Gurobi Optimizer version 13.0.3 build v13.0.3rc0 (linux64 - "Debian GNU/Linux 13 (trixie)")
+
+CPU model: AMD EPYC 9V74 80-Core Processor, instruction set [SSE2|AVX|AVX2|AVX512]
+Thread count: 5 physical cores, 5 logical processors, using up to 5 threads
+
+Non-default parameters:
+TimeLimit  300
+
+Optimize a model with 1036 rows, 1171 columns and 2920 nonzeros (Min)
+Model fingerprint: 0x79a3a10f
+Model has 545 linear objective coefficients
+Variable types: 204 continuous, 967 integer (341 binary)
+Coefficient statistics:
+  Matrix range     [1e+00, 3e+02]
+  Objective range  [3e+01, 1e+05]
+  Bounds range     [1e+00, 2e+01]
+  RHS range        [1e+00, 3e+02]
+
+Presolve removed 826 rows and 830 columns
+Presolve time: 0.01s
+Presolved: 210 rows, 341 columns, 974 nonzeros
+Variable types: 0 continuous, 341 integer (164 binary)
+
+Root relaxation: objective 3.361858e+06, 176 iterations, 0.00 seconds (0.00 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+*    0     0               0    3361858.2863 3361858.29  0.00%     -    0s
+
+Explored 1 nodes (176 simplex iterations) in 0.02 seconds (0.01 work units)
+Thread count was 5 (of 5 available processors)
+
+Solution count 1: 3.36186e+06 
+
+Optimal solution found (tolerance 1.00e-04)
+Best objective 3.361858286251e+06, best bound 3.361858286251e+06, gap 0.0000%
+Status: OPTIMAL_WITHIN_CONFIGURED_TOLERANCE
+Objective: USD 3,361,858.29; MIP gap: 0.000000%
+Output: /workspace/HA_Primary_Phi120_Run

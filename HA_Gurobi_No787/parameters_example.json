@@ -11,7 +11,7 @@
   },
   "demand_adjustment": {
     "load_factor_threshold": 1.0,
-    "multiplier_at_or_above": 1.0,
-    "multiplier_below": 1.0
+    "multiplier_at_or_above": 1.2,
+    "multiplier_below": 1.2
   }
 }

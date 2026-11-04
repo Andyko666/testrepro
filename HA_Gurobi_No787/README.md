@@ -21,12 +21,19 @@ tested here. No cloud paths or earlier files are required.
 
 ## Recorded run with this version
 
-Gurobi 13.0.3 actually solved all 204 retained flights using the default
-three-type estimates: objective **USD 3,201,237.68**, estimated spill **0.00**,
-and MIP gap **0%**. The compact model has **1,171 variables and 1,036 constraints**.
-Every original shared-event flow/fleet check passed, as did **31 tests**.
-Zero model spill is conditional on the estimated inputs, not proof of zero
-real rejected passengers. Evidence is under `validation/no787_gurobi/`.
+The user-selected primary case now assumes **phi=1.20**: demand is 20% above
+historical directional-route average carried passengers per departure. The
+assumption is documented in `ASSUMPTIONS.md` and `primary_assumptions.json`,
+which loads automatically in estimated mode. Source observations are unchanged.
+
+Gurobi 13.0.3 solved all 204 flights with objective **USD 3,361,858.29**,
+estimated spill **820.36** across **54 flights**, operating expense
+**USD 3,201,237.68**, and spill penalty **USD 160,620.61**. MIP gap is **0%**.
+The model has **1,171 variables and 1,036 constraints**. All original shared-event
+checks passed, as did **39 tests**. Spill is a conditional estimate, not
+measured rejected passengers or actual lost revenue. New primary evidence is
+under `validation/primary_phi_1_20/`. The earlier phi=1 benchmark remains under
+`validation/no787_gurobi/` for comparison.
 
 ## User-requested scope
 
@@ -73,7 +80,7 @@ or outside inventory data are invented.
 
 | Input | Default method | Limitation |
 |---|---|---|
-|Demand|Route monthly passengers/performed departures;phi=1|No arbitrary uplift; lost demand remains unobserved.|
+|Demand|Route monthly passengers/performed departures *1.20|User-selected primary assumption; true unmet demand remains unobserved.|
 |Costs|Supplied 608/696/721 hourly costs|Processed summaries, not independently authenticated raw Form 41. No 889 cost used.|
 |Turnarounds|Positive planned-dwell P10 rounded up to 5 minutes:30/100/75|Not approved minima. Samples119/9/16; ambiguous tail groups excluded.|
 |Fleet|Observed tail/type inference:16/16/17|Active-fleet scenario, not verified available fleet. Spares, maintenance and international assignments remain unknown.|
@@ -103,10 +110,11 @@ Other findings:
 
 Do not change source PASSENGERS or manually fill the spill variable. The demand
 formula is `q = monthly route passengers / performed departures * phi`.
-The default remains phi=1; true unmet demand is not identified from carried
-passengers. Higher multipliers are explicit stress scenarios, not observations.
+The source-preparation baseline remains phi=1. The primary model then loads
+phi=1.20 from `primary_assumptions.json`. True unmet demand is not identified
+from carried passengers; the uplift is an assumption, not an observation.
 
-Run one uniform demand scenario, for example +10%:
+Override the primary assumption, for example with +10%:
 
 ```bash
 python run_model.py --demand-multiplier 1.10
@@ -141,10 +149,15 @@ Recorded actual Gurobi results with unchanged fleet, costs and turns:
 
 All four reached zero gap and passed operational checks. The spill-dollar
 amounts remain conditional on the cost-recovery proxy, not measured DB1B fares.
-The tests show sensitivity; they do not establish which demand multiplier is
-true. Report the baseline and scenarios together. Do not choose a multiplier
-merely to force positive spill. Real flight-level booking/denied-demand data
-would be needed for stronger calibration.
+The comparison does not establish which multiplier is true. The user has chosen
+1.20 as the primary assumption; retain phi=1 as a benchmark and disclose the
+choice. Real flight-level booking/denied-demand data are needed for stronger calibration.
+
+Run the historical-average benchmark explicitly with:
+
+```bash
+python run_model.py --demand-multiplier 1.00
+```
 
 JSON precedence is also corrected: an explicit `demand_adjustment` rule clears
 the automatically generated per-route phi=1 values. Explicit per-route values
@@ -206,9 +219,9 @@ python -m unittest -v test_prepare_data test_gurobi_model test_compact_model tes
 ```
 
 Demand-control regression tests are in `test_demand_controls.py`; the full
-recorded suite including those tests has 36 passing tests. Actual comparison
+recorded suite including those tests has 39 passing tests. Actual comparison
 evidence is included under `validation/demand_sensitivity/`.
 
-Actual Gurobi evidence for this no-787 version is included in
-`validation/no787_gurobi/`. Estimated outputs remain conditional scenarios,
+New primary Gurobi evidence is included in `validation/primary_phi_1_20/`;
+`validation/no787_gurobi/` retains the original phi=1 benchmark. Outputs remain conditional scenarios,
 not verified actual fares, costs, aircraft availability or rejected passengers.

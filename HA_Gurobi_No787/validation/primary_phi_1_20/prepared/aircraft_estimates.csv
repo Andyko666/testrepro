@@ -1,0 +1,4 @@
+aircraft_type,aircraft_model,capacity,supplied_cost_per_airborne_hour,estimated_cost_per_airborne_hour,cost_source,inferred_active_tail_count,turnaround_positive_samples,scheduled_dwell_p10,turnaround_minutes
+608,Boeing 717-200,128.0,9656.481967213116,9656.481967213116,SUPPLIED_PROCESSED_SUMMARY,16,119,29.8,30
+696,Airbus A330-200,278.0,10014.119184193754,10014.119184193754,SUPPLIED_PROCESSED_SUMMARY,16,9,100.0,100
+721,Airbus A321neo,189.0,5886.598113207548,5886.598113207548,SUPPLIED_PROCESSED_SUMMARY,17,16,75.0,75
