@@ -56,6 +56,37 @@ def active_copies(departure, ready, event):
     return (event - departure) // DAY - (event - ready) // DAY
 
 
+def apply_load_factor_rule(load_factor, rule):
+    """Apply a documented rule to HISTORICAL route passengers/route seats.
+
+    The ratio is computed before assignment, not from forecast demand or the
+    selected aircraft's capacity. Strict > is supported without rounding LF.
+    Legacy >= rules retain their earlier behavior when comparison is omitted.
+    """
+    threshold = finite_number(rule.get("load_factor_threshold"), "load_factor_threshold")
+    if threshold > 1:
+        raise ValueError("load_factor_threshold must lie in [0,1].")
+    comparison = rule.get("comparison", ">=")
+    if comparison not in {">", ">="}:
+        raise ValueError("Load-factor comparison must be '>' or '>='.")
+    high_value = rule.get("multiplier_above", rule.get("multiplier_at_or_above"))
+    low_value = rule.get("multiplier_below_or_equal", rule.get("multiplier_below", 1.0))
+    high = finite_number(high_value, "high-load multiplier", minimum=1)
+    low = finite_number(low_value, "other-route multiplier", minimum=1)
+    if "multiplier_above" in rule and "multiplier_at_or_above" in rule:
+        if high != finite_number(rule["multiplier_at_or_above"], "legacy high multiplier", minimum=1):
+            raise ValueError("Conflicting high-load multiplier aliases.")
+    if "multiplier_below_or_equal" in rule and "multiplier_below" in rule:
+        if low != finite_number(rule["multiplier_below"], "legacy other-route multiplier", minimum=1):
+            raise ValueError("Conflicting other-route multiplier aliases.")
+    lf = pd.Series(load_factor, copy=True)
+    values = lf.to_numpy(dtype=float)
+    if not np.isfinite(values).all() or (values < 0).any() or (values > 1).any():
+        raise ValueError("Historical load factors must be finite and in [0,1].")
+    selected = lf.gt(threshold) if comparison == ">" else lf.ge(threshold)
+    return pd.Series(np.where(selected, high, low), index=lf.index, name="phi")
+
+
 def prepare_inputs(workbook: Path, parameters: dict):
     sheets = pd.read_excel(workbook, sheet_name=None)
     required = {"Schedule_UTC", "T100_Monthly", "DB1B_Route_Inputs", "Aircraft_Inputs"}
@@ -109,6 +140,7 @@ def prepare_inputs(workbook: Path, parameters: dict):
     if f.observed_passengers_per_departure.isna().any():
         raise ValueError("A scheduled directional route lacks T100 demand or time observations.")
     f = f.reset_index(drop=True)
+    f["historical_load_factor"] = f.load_factor
     rule = parameters.get("demand_adjustment")
     if rule is None:
         # Explicit baseline assumption, not a fact recovered from flown demand.
@@ -116,13 +148,8 @@ def prepare_inputs(workbook: Path, parameters: dict):
         f["phi"] = 1.0
         demand_source = "BASELINE_ASSUMPTION_phi_1_NO_UNOBSERVED_DEMAND_INFLATION"
     else:
-        threshold = finite_number(rule.get("load_factor_threshold"), "load_factor_threshold")
-        if threshold > 1:
-            raise ValueError("load_factor_threshold must lie in [0,1].")
-        high = finite_number(rule.get("multiplier_at_or_above"), "multiplier_at_or_above", minimum=1)
-        low = finite_number(rule.get("multiplier_below", 1.0), "multiplier_below", minimum=1)
-        f["phi"] = np.where(f.load_factor >= threshold, high, low)
-        demand_source = "EXPLICIT_PARAMETER_SCENARIO_NOT_OBSERVED_DEMAND"
+        f["phi"] = apply_load_factor_rule(f.historical_load_factor, rule)
+        demand_source = "HISTORICAL_ROUTE_LOAD_FACTOR_RULE_NOT_OBSERVED_UNMET_DEMAND"
     # Optional route-level demand multipliers are explicit estimates from the
     # separate estimator, not values silently inferred inside optimization.
     route_phi = parameters.get("route_demand_multipliers", {})
@@ -331,6 +358,12 @@ def plain_excel(path, tables):
                 for cell in row:
                     cell.font=Font(name="Calibri",size=11,color="000000",bold=(cell.row==1))
                     cell.fill=PatternFill(fill_type=None)
+            for column in sheet.iter_cols():
+                header = column[0].value
+                if header == "historical_load_factor":
+                    for cell in column[1:]: cell.number_format = "0.00%"
+                elif header == "phi":
+                    for cell in column[1:]: cell.number_format = "0.00"
 
 
 def solve_gurobi(data, output, time_limit, mip_gap):
@@ -376,6 +409,9 @@ def solve_gurobi(data, output, time_limit, mip_gap):
                              scheduled_departure_UTC=f.get("scheduled_dep_UTC"),
                              scheduled_arrival_UTC=f.get("scheduled_arr_UTC"),
                              aircraft_type=k,capacity=ac.capacity,demand=f.demand,
+                             historical_passengers_per_departure=f.observed_passengers_per_departure,
+                             historical_load_factor=f.historical_load_factor,
+                             demand_uplift_applied=bool(f.phi>1),
                              phi=f.phi,airborne_hours=f.airborne_hours,
                              spill_penalty_usd=f.fare_usd,penalty_source=f.fare_source,
                              estimated_capacity_shortfall=max(f.demand-ac.capacity,0),

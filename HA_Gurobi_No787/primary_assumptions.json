@@ -1,12 +1,14 @@
 {
   "demand_adjustment": {
-    "load_factor_threshold": 1.0,
-    "multiplier_at_or_above": 1.2,
-    "multiplier_below": 1.2
+    "load_factor_threshold": 0.9,
+    "comparison": ">",
+    "multiplier_above": 1.2,
+    "multiplier_below_or_equal": 1.0
   },
   "estimation_metadata": {
-    "demand": "User-selected primary modeling assumption: estimated demand on every retained flight equals 1.20 times its directional route's historical monthly carried passengers per performed departure. The 20% uplift is assumed, not estimated from observed unmet demand. Raw passenger observations are unchanged.",
-    "demand_formula": "q_f = 1.20 * sum_route(PASSENGERS) / sum_route(DEPARTURES_PERFORMED)",
+    "demand": "User-selected primary assumption: uplift demand by 20% only when the directional route's historical load factor is strictly greater than 0.90. At or below 0.90, use the historical carried-passenger mean without uplift. This is a modeling rule, not observed unmet demand. Raw observations are unchanged.",
+    "load_factor_formula": "LF_r = sum_route(PASSENGERS) / sum_route(SEATS), using full historical route data before optimization, including historical787operations on retained routes.",
+    "demand_formula": "q_f = [sum_route(PASSENGERS) / sum_route(DEPARTURES_PERFORMED)] * phi_r; phi_r=1.20 if LF_r>0.90, otherwise1.00.",
     "same_route_limitation": "Flights on the same directional route retain the same estimated average demand; this assumption does not estimate time-of-day peaks."
   }
 }

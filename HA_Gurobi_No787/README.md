@@ -1,227 +1,83 @@
-# Hawaiian Airlines: Gurobi without the 787
+# Hawaiian Airlines: Load-Factor Code Update
 
-This version uses only **608(B717),696(A330),721(A321neo)** as candidate types.
-Type 889(B787) is excluded from assignments, fleet counts and operating costs.
-No 787 cost proxy is calculated. Code, comments and outputs are English; Excel
-outputs are plain black and white.
+This branch updates the already published no-787 project. The primary demand rule is now historical LF>0.90:phi=1.20; otherwisephi=1.00.
 
-## Quick start
+# Code Update: Conditional Historical Load Factor
 
-Unzip and open a terminal in this folder:
+This download contains code/configuration only. It does not include uploaded
+Excel data or newly derived operational results. Use your existing project,
+data files and Python virtual environment.
 
-```bash
-python -m pip install -r requirements.txt
-python run_model.py
+## Apply the update in your existing project folder
+
+Copy these files next to your current `prepare_data.py` and `compact_model.py`,
+replacing the matching code/configuration files:
+
+- `run_model.py`
+- `gurobi_model.py`
+- `primary_assumptions.json`
+- `run_load_factor_comparison.py` (new comparison runner)
+
+Keep your `data` and `.venv312` folders. No new dependencies are required.
+Do not run from the ZIP preview or an outer Downloads folder.
+
+In your existing VS Code terminal, run:
+
+```powershell
+.\.venv312\Scripts\python.exe run_model.py
 ```
 
-Use Python 3.11 or 3.12. On macOS/Linux use `python3` if needed; on Windows `py`
-may be the Python command. A usable Gurobi license applies. Gurobi 12–13 are
-supported;13.0.3 was tested. The compact default fits the restricted license
-tested here. No cloud paths or earlier files are required.
+Or state the rule explicitly:
 
-## Recorded run with this version
-
-The user-selected primary case now assumes **phi=1.20**: demand is 20% above
-historical directional-route average carried passengers per departure. The
-assumption is documented in `ASSUMPTIONS.md` and `primary_assumptions.json`,
-which loads automatically in estimated mode. Source observations are unchanged.
-
-Gurobi 13.0.3 solved all 204 flights with objective **USD 3,361,858.29**,
-estimated spill **820.36** across **54 flights**, operating expense
-**USD 3,201,237.68**, and spill penalty **USD 160,620.61**. MIP gap is **0%**.
-The model has **1,171 variables and 1,036 constraints**. All original shared-event
-checks passed, as did **39 tests**. Spill is a conditional estimate, not
-measured rejected passengers or actual lost revenue. New primary evidence is
-under `validation/primary_phi_1_20/`. The earlier phi=1 benchmark remains under
-`validation/no787_gurobi/` for comparison.
-
-## User-requested scope
-
-The supplied daily file has206 flights. Two have no eligible type after removing 787:
-
-| Flight | Route | Remaining eligible types | Treatment |
-|---|---|---|---|
-|HA35|PHX-HNL|None|Outside this run's scope|
-|HA36|HNL-PHX|None|Outside this run's scope|
-
-The model therefore retains **204 flights,18 airports,70 directional routes**.
-Excluded records and reasons are saved in `prepared/`. Other flights remain,
-including LAX-HNL/HNL-LAX flights historically served by 787 that can be assigned
-another historically eligible type. No further cancellations or retiming occur.
-
-The supplied PDF, saved as `docs/model.pdf`, has a Milestone 3 filename but its
-content is the complete Milestone 4 model. This experiment deliberately restricts
-its candidate set and flight scope at the user's request; coverage, spill,
-cyclic flow, readiness and fleet-cap structure otherwise follow that PDF.
-
-## Source files are unchanged
-
-| Local file | Latest uploaded source | Rows |
-|---|---|---:|
-|`data/on_time.xlsx`|October 16 On-Time|206|
-|`data/t100.xlsx`|October 2024 T100|104|
-|`data/costs.xlsx`|Q4 cost summary|5|
-
-All 104 monthly rows remain source evidence. Monthly-only routes do not create
-scheduled flights. Original 787 rows are not assignment choices, but their
-passengers/time remain historical demand information on retained routes.
-
-**Demand and airborne time use full historical route totals, including 787.**
-Excluding an aircraft option must not artificially erase its carried passengers.
-**Spill-penalty calibration uses only candidate-aircraft costs/passengers**, so
-it needs no unknown787cost. Type-level capacities are128/278/189seats.
-
-Tail classification uses the original206 flights and full historical eligibility
-BEFORE scope exclusions. Two source tails uniquely compatible with 787 are not
-reclassified as A330 just because their PHX flights are removed. No FAA evidence
-or outside inventory data are invented.
-
-## Estimates and unresolved issues
-
-| Input | Default method | Limitation |
-|---|---|---|
-|Demand|Route monthly passengers/performed departures *1.20|User-selected primary assumption; true unmet demand remains unobserved.|
-|Costs|Supplied 608/696/721 hourly costs|Processed summaries, not independently authenticated raw Form 41. No 889 cost used.|
-|Turnarounds|Positive planned-dwell P10 rounded up to 5 minutes:30/100/75|Not approved minima. Samples119/9/16; ambiguous tail groups excluded.|
-|Fleet|Observed tail/type inference:16/16/17|Active-fleet scenario, not verified available fleet. Spares, maintenance and international assignments remain unknown.|
-|Spill penalty|Candidate monthly route air-operating cost / candidate carried passengers|Cost-recovery proxy, **not DB1Bfare or lost revenue**. This explicitly substitutes for the PDF-requested fare source.|
-
-Other findings:
-
-- The206source airport totals balance; removing the two opposite PHX flights
-  preserves balance in the204 flight scope. Full timing/type/fleet feasibility
-  is still independently checked after optimization.
-- Five source tails have ambiguous types. Route-share likelihood scores are
-  not calibrated probabilities or registry verification.
-- Ten monthly rows have scheduled 0 / performed positive. They are retained and
-  flagged; use performed departures. Do not presume errors or ferry flights.
-- HNL-LAX/type 696 has two nonidentical source rows. Sum them: 69 departures,
- 17,495 passengers, 19,182 seats, 20,245 airborne minutes. Do not deduplicate them.
-- N493HA, HA241 to HA296has a planned−15 minute gap versus 44 minutes actual. It is
-  flagged and excluded from turnaround samples. Original times are preserved;
-  actual tail order need not be the planned assignment.
-- Cost types 837 and 889 remain in the source summary and are not candidates.
-- All times are converted using IANA zones, retaining full dates before modulo
- 1440minutes. Phoenix has no DST. Costs and flight hours use airborne units.
-
-## Options
-
-### Demand sensitivity: start with the baseline, then compare scenarios
-
-Do not change source PASSENGERS or manually fill the spill variable. The demand
-formula is `q = monthly route passengers / performed departures * phi`.
-The source-preparation baseline remains phi=1. The primary model then loads
-phi=1.20 from `primary_assumptions.json`. True unmet demand is not identified
-from carried passengers; the uplift is an assumption, not an observation.
-
-Override the primary assumption, for example with +10%:
-
-```bash
-python run_model.py --demand-multiplier 1.10
+```powershell
+.\.venv312\Scripts\python.exe run_model.py --load-factor-threshold 0.90 --high-load-multiplier 1.20
 ```
 
-The flag sets absolute phi for every retained route and takes precedence over
-JSON load-factor rules and route-specific values. It must be finite and >=1.
-The effective phi is recorded in the assignments, calculated inputs, parameters
-and run summary. It does not introduce time-of-day differences within a route.
+**Do not add `--demand-multiplier 1.20` for the conditional rule.** That option
+explicitly applies a uniform uplift to every route and bypasses LF selection.
 
-Run the four standard cases and create a comparison workbook:
+## Definition and assumption
 
-```bash
-python run_sensitivity.py
+Before optimization, for each directional route:
+
+LF = sum historical PASSENGERS / sum historical SEATS.
+
+Base demand = sum historical PASSENGERS / sum DEPARTURES_PERFORMED.
+
+If LF > 0.90, phi=1.20. If LF <= 0.90, phi=1.00.
+
+Estimated flight demand = base demand * phi.
+
+Compare at full precision; equality does not trigger uplift. Sum the observations
+first rather than averaging aircraft-type LF ratios. Historical observations on
+retained routes include all aircraft types, even when 787 is not an assignment
+option. Do not use the newly assigned capacity or inflated demand to trigger
+uplift; that would make demand depend on the optimization decision.
+
+Threshold and uplift are user-selected assumptions. The PDF permits a documented
+team-defined load-factor adjustment, but does not prescribe these numbers.
+Monthly averages do not identify time-of-day peaks or true unmet demand. Original
+source observations remain unchanged; spill penalties remain proxies unless
+observed directional fares are provided.
+
+## Compare thresholds
+
+```powershell
+.\.venv312\Scripts\python.exe run_load_factor_comparison.py
 ```
 
-Open `results/sensitivity_<timestamp>/Demand_Sensitivity.xlsx`. Each case also
-has its own full Gurobi outputs and audit. For a different set of scenarios:
+This reruns the historical-average benchmark, LF>0.90 and LF>0.95 using your local
+data and Gurobi. Open the generated `Load_Factor_Comparison.xlsx` in the new
+`results/load_factor_comparison_<timestamp>/` folder. Results remain local.
 
-```bash
-python run_sensitivity.py --factors 1 1.05 1.10 1.20
-```
+## Read the generated result
 
-Recorded actual Gurobi results with unchanged fleet, costs and turns:
+`Assignments` now includes `historical_load_factor`, the historical passenger
+mean, actual `phi`, `demand_uplift_applied`, adjusted demand, and spill/costs.
+`Demand_Rule_Audit` lists the rule for every retained route. `Run_Summary` records
+the actual solver status, gap and uplift counts. These fields let you check
+whether a rule triggered without inferring it from the final aircraft capacity.
 
-| Uniform phi | Flights with spill | Estimated spilled passengers | Spill penalty USD | Total objective USD |
-|---|---:|---:|---:|---:|
-|1.00|0|0.00|0.00|3,201,237.68|
-|1.05|0|0.00|0.00|3,201,237.68|
-|1.10|18|86.66|16,770.41|3,218,008.08|
-|1.20|54|820.36|160,620.61|3,361,858.29|
-
-All four reached zero gap and passed operational checks. The spill-dollar
-amounts remain conditional on the cost-recovery proxy, not measured DB1B fares.
-The comparison does not establish which multiplier is true. The user has chosen
-1.20 as the primary assumption; retain phi=1 as a benchmark and disclose the
-choice. Real flight-level booking/denied-demand data are needed for stronger calibration.
-
-Run the historical-average benchmark explicitly with:
-
-```bash
-python run_model.py --demand-multiplier 1.00
-```
-
-JSON precedence is also corrected: an explicit `demand_adjustment` rule clears
-the automatically generated per-route phi=1 values. Explicit per-route values
-in the override still take precedence over that rule. The uniform CLI flag is
-applied last. Existing baseline results are unchanged.
-
-```bash
-python run_model.py --validate-only
-python run_model.py --mode strict --validate-only
-python run_model.py --parameters parameters_example.json
-python run_model.py --time-limit 600 --mip-gap 0.001
-```
-
-Strict mode applies no generated assumptions and reports76 missing inputs:
-70 route fares,3 turnarounds and3 available-fleet counts. It does not require 787 cost.
-Overrides merge with unspecified generated values;889overrides are rejected.
-The example JSON is a scenario, not historical evidence.
-
-Optional real directional fare CSVs use `origin,dest,fare_usd`, positive USD
-prices, one row per route. They take precedence over proxies:
-
-```bash
-python run_model.py --fares my_real_route_fares.csv
-```
-
-Files can also be selected with `--on-time`, `--t100`, `--costs`. Their schema
-and period must match the documented source fields. Source files are not edited.
-
-## PDF-equivalent compact formulation
-
-Compact mode removes unchanged inventory variables between local events. Cyclic
-flow conserves total aircraft of each type, so duplicate fleet cuts are redundant.
-All original common-event inventories and fleet caps are reconstructed and checked
-after solving. This is exact elimination, not hourly discretization. Choosing
-unused idle inventory zero preserves assignment feasibility/objectives because
-the PDF has fleet upper bounds and no fixed initial distribution.
-
-See `compact_model.py` and the full-versus-compact Gurobi tests. For the literal
-shared-event formulation use `python run_model.py --formulation full`; it may
-need a larger license. License failures are not called mathematical infeasibility.
-
-## Results and tests
-
-Each run creates `results/<UTC timestamp>/` with:
-
-- `gurobi_results.xlsx` and `assignments.csv`: assigned types, dates, estimated
-  demand/spill, penalty sources and costs. The PDF assigns types, not tail IDs.
-- `ground_inventory.csv`: integer inventory at every shared event.
-- `model.lp`, `gurobi.log`, `run_summary.json`, `RUN_REPORT.md`.
-- `effective_parameters.json` and all source/estimate/exclusion audits in `prepared/`.
-- An IIS file if Gurobi proves infeasibility.
-
-Explicit nonempty output directories are not overwritten. Inspect the exact
-status and gap; feasible time-limit incumbents are not called optimal.
-Exit codes 0/1/2/3 mean validated-or-feasible/error/missing-inputs/no-incumbent.
-
-```bash
-python -m unittest -v test_prepare_data test_gurobi_model test_compact_model test_entrypoint
-```
-
-Demand-control regression tests are in `test_demand_controls.py`; the full
-recorded suite including those tests has 39 passing tests. Actual comparison
-evidence is included under `validation/demand_sensitivity/`.
-
-New primary Gurobi evidence is included in `validation/primary_phi_1_20/`;
-`validation/no787_gurobi/` retains the original phi=1 benchmark. Outputs remain conditional scenarios,
-not verified actual fares, costs, aircraft availability or rejected passengers.
+The aircraft scope remains the no-787 model. Existing source-preparation,
+capacity, fleet and turnaround assumptions remain in use. Source data and
+Gurobi licensing must already be configured as in your working project.
