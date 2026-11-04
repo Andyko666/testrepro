@@ -1,0 +1,101 @@
+test_cost_based_proxy_is_reproducible_not_observed_fare (test_prepare_data.SourcePreparationTests.test_cost_based_proxy_is_reproducible_not_observed_fare) ... ok
+test_current_source_counts_and_no_mutation (test_prepare_data.SourcePreparationTests.test_current_source_counts_and_no_mutation) ... ok
+test_demand_and_time_keep_four_type_history (test_prepare_data.SourcePreparationTests.test_demand_and_time_keep_four_type_history) ... ok
+test_negative_ground_interval_preserved_not_used (test_prepare_data.SourcePreparationTests.test_negative_ground_interval_preserved_not_used) ... ok
+test_only_787_only_flights_are_excluded (test_prepare_data.SourcePreparationTests.test_only_787_only_flights_are_excluded) ... ok
+test_rare_operations_and_repeated_keys_are_not_deleted (test_prepare_data.SourcePreparationTests.test_rare_operations_and_repeated_keys_are_not_deleted) ... ok
+test_source_blanks_and_estimates_separated (test_prepare_data.SourcePreparationTests.test_source_blanks_and_estimates_separated) ... ok
+test_tail_inference_precedes_model_scope_filter (test_prepare_data.SourcePreparationTests.test_tail_inference_precedes_model_scope_filter) ... ok
+test_bts_clock_validation_and_midnight (test_prepare_data.TimeConversionTests.test_bts_clock_validation_and_midnight) ... ok
+test_october_austin_honolulu_offsets (test_prepare_data.TimeConversionTests.test_october_austin_honolulu_offsets) ... ok
+test_overnight_destination_date_and_clock_check (test_prepare_data.TimeConversionTests.test_overnight_destination_date_and_clock_check) ... ok
+test_count_matches_explicit_daily_copy_enumeration (test_gurobi_model.ActiveCopyTests.test_count_matches_explicit_daily_copy_enumeration) ... ok
+test_departure_included_and_readiness_excluded (test_gurobi_model.ActiveCopyTests.test_departure_included_and_readiness_excluded) ... ok
+test_overnight_and_more_than_one_day (test_gurobi_model.ActiveCopyTests.test_overnight_and_more_than_one_day) ... ok
+test_airport_imbalance_cannot_be_fixed_by_large_fleet (test_gurobi_model.GurobiModelTests.test_airport_imbalance_cannot_be_fixed_by_large_fleet) ... Restricted license - for non-production use only - expires 2027-11-29
+Set parameter TimeLimit to value 10
+Set parameter MIPGap to value 0
+ok
+test_exactly_ready_cyclic_case_has_expected_cost_and_spill (test_gurobi_model.GurobiModelTests.test_exactly_ready_cyclic_case_has_expected_cost_and_spill) ... Set parameter TimeLimit to value 10
+Set parameter MIPGap to value 0
+ok
+test_independent_validator_rejects_corrupted_solution (test_gurobi_model.GurobiModelTests.test_independent_validator_rejects_corrupted_solution) ... Set parameter TimeLimit to value 10
+Set parameter MIPGap to value 0
+ok
+test_occupation_longer_than_day_needs_two_aircraft (test_gurobi_model.GurobiModelTests.test_occupation_longer_than_day_needs_two_aircraft) ... Set parameter TimeLimit to value 10
+Set parameter MIPGap to value 0
+Set parameter TimeLimit to value 10
+Set parameter MIPGap to value 0
+ok
+test_one_minute_before_readiness_is_infeasible (test_gurobi_model.GurobiModelTests.test_one_minute_before_readiness_is_infeasible) ... Set parameter TimeLimit to value 10
+Set parameter MIPGap to value 0
+ok
+test_overnight_connection_is_available_next_day (test_gurobi_model.GurobiModelTests.test_overnight_connection_is_available_next_day) ... Set parameter TimeLimit to value 10
+Set parameter MIPGap to value 0
+ok
+test_eligible_type_choice_and_capacity_cost_tradeoff_preserved (test_compact_model.CompactEquivalenceTests.test_eligible_type_choice_and_capacity_cost_tradeoff_preserved) ... Set parameter TimeLimit to value 10
+Set parameter MIPGap to value 0
+Set parameter TimeLimit to value 10
+Set parameter MIPGap to value 0
+ok
+test_exact_ready_spill_and_all_global_inventory_cuts (test_compact_model.CompactEquivalenceTests.test_exact_ready_spill_and_all_global_inventory_cuts) ... Set parameter TimeLimit to value 10
+Set parameter MIPGap to value 0
+Set parameter TimeLimit to value 10
+Set parameter MIPGap to value 0
+ok
+test_exact_two_day_occupation_with_same_modulo_event (test_compact_model.CompactEquivalenceTests.test_exact_two_day_occupation_with_same_modulo_event) ... Set parameter TimeLimit to value 10
+Set parameter MIPGap to value 0
+Set parameter TimeLimit to value 10
+Set parameter MIPGap to value 0
+Set parameter TimeLimit to value 10
+Set parameter MIPGap to value 0
+Set parameter TimeLimit to value 10
+Set parameter MIPGap to value 0
+ok
+test_imbalance_is_not_hidden_by_eliminating_events (test_compact_model.CompactEquivalenceTests.test_imbalance_is_not_hidden_by_eliminating_events) ... Set parameter TimeLimit to value 10
+Set parameter MIPGap to value 0
+Set parameter TimeLimit to value 10
+Set parameter MIPGap to value 0
+ok
+test_multi_day_occupation_and_single_fleet_cut (test_compact_model.CompactEquivalenceTests.test_multi_day_occupation_and_single_fleet_cut) ... Set parameter TimeLimit to value 10
+Set parameter MIPGap to value 0
+Set parameter TimeLimit to value 10
+Set parameter MIPGap to value 0
+Set parameter TimeLimit to value 10
+Set parameter MIPGap to value 0
+Set parameter TimeLimit to value 10
+Set parameter MIPGap to value 0
+ok
+test_no_incident_airport_type_inventory_is_zero_without_loss (test_compact_model.CompactEquivalenceTests.test_no_incident_airport_type_inventory_is_zero_without_loss) ... Set parameter TimeLimit to value 10
+Set parameter MIPGap to value 0
+Set parameter TimeLimit to value 10
+Set parameter MIPGap to value 0
+ok
+test_one_minute_before_readiness_is_infeasible (test_compact_model.CompactEquivalenceTests.test_one_minute_before_readiness_is_infeasible) ... Set parameter TimeLimit to value 10
+Set parameter MIPGap to value 0
+Set parameter TimeLimit to value 10
+Set parameter MIPGap to value 0
+ok
+test_overnight_reconstruction_before_first_local_event (test_compact_model.CompactEquivalenceTests.test_overnight_reconstruction_before_first_local_event) ... Set parameter TimeLimit to value 10
+Set parameter MIPGap to value 0
+Set parameter TimeLimit to value 10
+Set parameter MIPGap to value 0
+ok
+test_local_fare_import_precedes_generated_proxy (test_entrypoint.EntryPointTests.test_local_fare_import_precedes_generated_proxy) ... Preparing the supplied three Excel files; originals remain unchanged.
+Input mode: estimated. See prepared audits for every observation, estimate and limitation.
+Choose a new output directory; refusing to mix results with existing files: /tmp/tmp7j890muk/run
+ok
+test_parameter_overrides_preserve_unspecified_types (test_entrypoint.EntryPointTests.test_parameter_overrides_preserve_unspecified_types) ... ok
+test_strict_mode_lists_missing_inputs_instead_of_optimizing (test_entrypoint.EntryPointTests.test_strict_mode_lists_missing_inputs_instead_of_optimizing) ... Status: INPUTS_VALIDATED_NO_OPTIMIZATION
+Output: /tmp/tmp7j890muk/run
+Preparing the supplied three Excel files; originals remain unchanged.
+Input mode: strict. See prepared audits for every observation, estimate and limitation.
+ok
+
+----------------------------------------------------------------------
+Ran 31 tests in 5.245s
+
+OK
+Status: MISSING_INPUTS_NO_OPTIMIZATION
+76 required inputs remain missing. See missing_inputs.csv.
+Output: /tmp/tmpozgef1yr/strict

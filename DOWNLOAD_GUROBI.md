@@ -1,0 +1,27 @@
+# Hawaiian Airlines Gurobi Download
+
+This branch contains the tested model excluding the Boeing787, as requested.
+The model retains204flights and candidate types608(B717),696(A330),721(A321neo).
+HA35PHX-HNL and HA36HNL-PHX are listed outside the scope because only787was
+historically eligible for those directional routes in the supplied data.
+
+Download [HA_Gurobi_No787.zip](downloads/HA_Gurobi_No787.zip) using GitHub's
+**Download raw file** button. Unzip it and open the `HA_Gurobi_No787` folder in
+VSCode. The same source files can be browsed in [the project folder](HA_Gurobi_No787).
+
+From a terminal in that folder:
+
+```bash
+python -m pip install -r requirements.txt
+python run_model.py
+```
+
+On Windows, `py` may replace `python`; on macOS/Linux use `python3` if needed.
+Python3.11/3.12is recommended. A usable Gurobi license applies. The compact
+formulation solved in the size-limited license tested with Gurobi13.0.3.
+
+Recorded actual Gurobi result: USD3,201,237.68,0%gap,31tests passed.
+These are results under explicitly documented estimates, not verified historical
+fare revenue or true lost passengers. Source data, parameter audits, exclusions,
+modelLP, solverlog and result workbooks are included. Read the project README
+for setup, assumptions and remaining data limitations.

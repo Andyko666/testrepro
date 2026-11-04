@@ -1,0 +1,3 @@
+flight_id,flight_date,carrier,flight_number,tail_number,origin,dest,scheduled_dep_UTC,scheduled_arr_UTC,actual_dep_UTC,actual_arr_UTC,CRSElapsedTime_minutes,Distance_miles,Cancelled,Diverted,origin_timezone,destination_timezone,source_excel_row,exclusion_reason,historical_eligible_types
+20241016_HA35_PHX_HNL,2024-10-16,HA,35,N781HA,PHX,HNL,2024-10-16 14:25:00,2024-10-16 21:00:00,2024-10-16 14:30:00,2024-10-16 20:39:00,395,2917,0,0,America/Phoenix,Pacific/Honolulu,32,NO_ELIGIBLE_TYPE_AFTER_USER_EXCLUDED_787,889
+20241016_HA36_HNL_PHX,2024-10-16,HA,36,N780HA,HNL,PHX,2024-10-17 00:20:00,2024-10-17 06:05:00,2024-10-17 00:29:00,2024-10-17 06:32:00,345,2917,0,0,Pacific/Honolulu,America/Phoenix,33,NO_ELIGIBLE_TYPE_AFTER_USER_EXCLUDED_787,889

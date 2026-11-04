@@ -1,0 +1,43 @@
+
+Gurobi 13.0.3 (linux64) logging started Wed Nov  4 20:19:07 2026
+
+Set parameter LogFile to value "validation/no787_gurobi/gurobi.log"
+Set parameter TimeLimit to value 300
+Set parameter MIPGap to value 0.0001
+Gurobi Optimizer version 13.0.3 build v13.0.3rc0 (linux64 - "Debian GNU/Linux 13 (trixie)")
+
+CPU model: AMD EPYC 9V74 80-Core Processor, instruction set [SSE2|AVX|AVX2|AVX512]
+Thread count: 5 physical cores, 5 logical processors, using up to 5 threads
+
+Non-default parameters:
+TimeLimit  300
+
+Optimize a model with 1036 rows, 1171 columns and 2920 nonzeros (Min)
+Model fingerprint: 0xd58e0646
+Model has 545 linear objective coefficients
+Variable types: 204 continuous, 967 integer (341 binary)
+Coefficient statistics:
+  Matrix range     [1e+00, 3e+02]
+  Objective range  [3e+01, 1e+05]
+  Bounds range     [1e+00, 2e+01]
+  RHS range        [1e+00, 3e+02]
+
+Presolve removed 826 rows and 830 columns
+Presolve time: 0.00s
+Presolved: 210 rows, 341 columns, 974 nonzeros
+Variable types: 0 continuous, 341 integer (164 binary)
+
+Root relaxation: objective 3.201238e+06, 163 iterations, 0.00 seconds (0.00 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+*    0     0               0    3201237.6756 3201237.68  0.00%     -    0s
+
+Explored 1 nodes (163 simplex iterations) in 0.01 seconds (0.01 work units)
+Thread count was 5 (of 5 available processors)
+
+Solution count 1: 3.20124e+06 
+
+Optimal solution found (tolerance 1.00e-04)
+Best objective 3.201237675585e+06, best bound 3.201237675585e+06, gap 0.0000%

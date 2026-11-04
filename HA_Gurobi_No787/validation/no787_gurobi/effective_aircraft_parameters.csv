@@ -1,0 +1,4 @@
+aircraft_type_BTS_code,aircraft_model,cost_per_air_hour_from_provided_2024Q4_summary_USD,minimum_turnaround_minutes_INPUT_REQUIRED,available_fleet_count_on_2024_10_16_INPUT_REQUIRED,capacity,turn_minutes,fleet,cost_per_hour
+608,Boeing 717-200,9656.481967213116,,,128.0,30.0,16.0,9656.481967213116
+696,Airbus A330-200,10014.11918419375,,,278.0,100.0,16.0,10014.11918419375
+721,Airbus A321neo,5886.598113207548,,,189.0,75.0,17.0,5886.598113207548

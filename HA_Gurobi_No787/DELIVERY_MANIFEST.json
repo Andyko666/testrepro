@@ -1,0 +1,21 @@
+{
+  "source_sha256": {
+    "on_time": "ba044b86a045336abedf930cceb32baeff51e2a0b886fea4f443bfec7c47c13f",
+    "t100": "6cc7cc9886625a7c411113bbde5fbd7df7f311a02f80218e2adcb0ec723eaeb6",
+    "costs": "f69907080ab3555de873928afbac184664c5f9190bf0801f70c7e3159e694860"
+  },
+  "model_types": [
+    608,
+    696,
+    721
+  ],
+  "flights": 204,
+  "excluded_flights": [
+    "20241016_HA35_PHX_HNL",
+    "20241016_HA36_HNL_PHX"
+  ],
+  "actual_gurobi_status": "OPTIMAL_WITHIN_CONFIGURED_TOLERANCE",
+  "actual_gurobi_objective_usd": 3201237.67558547,
+  "actual_gurobi_gap": 0.0,
+  "tests_passed": 31
+}

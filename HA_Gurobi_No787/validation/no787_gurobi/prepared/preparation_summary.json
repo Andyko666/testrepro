@@ -1,0 +1,51 @@
+{
+  "source_sha256": {
+    "on_time": "ba044b86a045336abedf930cceb32baeff51e2a0b886fea4f443bfec7c47c13f",
+    "t100": "6cc7cc9886625a7c411113bbde5fbd7df7f311a02f80218e2adcb0ec723eaeb6",
+    "costs": "f69907080ab3555de873928afbac184664c5f9190bf0801f70c7e3159e694860"
+  },
+  "source_rows": {
+    "on_time": 206,
+    "t100": 104,
+    "costs": 5
+  },
+  "flights": 204,
+  "original_flights": 206,
+  "excluded_flights": [
+    "20241016_HA35_PHX_HNL",
+    "20241016_HA36_HNL_PHX"
+  ],
+  "excluded_flight_count": 2,
+  "candidate_types": [
+    608,
+    696,
+    721
+  ],
+  "airports": 18,
+  "routes": 70,
+  "monthly_rows": 104,
+  "eligible_pairs": 341,
+  "common_events": 362,
+  "observed_tails": 51,
+  "original_observed_tails": 51,
+  "inferred_candidate_tails": 49,
+  "inferred_787_tails_excluded": [
+    "N780HA",
+    "N781HA"
+  ],
+  "inferred_fleet": {
+    "608": 16,
+    "696": 16,
+    "721": 17
+  },
+  "turnaround_minutes": {
+    "608": 30,
+    "696": 100,
+    "721": 75
+  },
+  "ambiguous_tail_count": 5,
+  "negative_planned_ground_intervals": 1,
+  "zero_scheduled_positive_performed_rows": 10,
+  "airport_totals_balanced": true,
+  "assumptions_are_separate_from_source_values": true
+}
