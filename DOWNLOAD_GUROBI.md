@@ -25,3 +25,18 @@ These are results under explicitly documented estimates, not verified historical
 fare revenue or true lost passengers. Source data, parameter audits, exclusions,
 modelLP, solverlog and result workbooks are included. Read the project README
 for setup, assumptions and remaining data limitations.
+
+## New demand controls
+
+Download [the version with demand scenarios](downloads/HA_Gurobi_No787_DemandScenarios.zip).
+It adds a uniform demand multiplier and a four-case comparison runner:
+
+```bash
+python run_model.py --demand-multiplier 1.10
+python run_sensitivity.py
+```
+
+If you already installed the original package, replace `run_model.py` and add
+`run_sensitivity.py` in your existing folder. Keep your data and Python virtual
+environment. No additional dependencies are required. Default phi=1 is unchanged.
+These are assumption/sensitivity controls, not claims about actual unmet demand.

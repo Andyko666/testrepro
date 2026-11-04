@@ -1,0 +1,5 @@
+demand_multiplier,status,objective_usd,operating_cost_usd,spill_cost_usd,estimated_spilled_passengers,mip_gap,flights_with_spill,case_directory,demand_interpretation,objective_change_vs_phi_1_usd
+1.0,OPTIMAL_WITHIN_CONFIGURED_TOLERANCE,3201237.67558547,3201237.67558547,0.0,0.0,0.0,0,case_01_phi_1,"Assumed demand stress, not observed true demand or actual denied boarding.",0.0
+1.05,OPTIMAL_WITHIN_CONFIGURED_TOLERANCE,3201237.67558547,3201237.67558547,0.0,0.0,0.0,0,case_02_phi_1.05,"Assumed demand stress, not observed true demand or actual denied boarding.",0.0
+1.1,OPTIMAL_WITHIN_CONFIGURED_TOLERANCE,3218008.081802141,3201237.6755854706,16770.40621667001,86.65680953166728,0.0,18,case_03_phi_1.1,"Assumed demand stress, not observed true demand or actual denied boarding.",16770.40621667076
+1.2,OPTIMAL_WITHIN_CONFIGURED_TOLERANCE,3361858.286250919,3201237.67558547,160620.61066544853,820.3597309070067,0.0,54,case_04_phi_1.2,"Assumed demand stress, not observed true demand or actual denied boarding.",160620.61066544894

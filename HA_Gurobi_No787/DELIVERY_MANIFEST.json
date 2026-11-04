@@ -17,5 +17,18 @@
   "actual_gurobi_status": "OPTIMAL_WITHIN_CONFIGURED_TOLERANCE",
   "actual_gurobi_objective_usd": 3201237.67558547,
   "actual_gurobi_gap": 0.0,
-  "tests_passed": 31
+  "tests_passed": 36,
+  "demand_controls": {
+    "uniform_cli": "--demand-multiplier",
+    "comparison_script": "run_sensitivity.py",
+    "scenarios": [
+      1,
+      1.05,
+      1.1,
+      1.2
+    ],
+    "all_actual_gurobi_runs_optimal": true,
+    "comparison": "validation/demand_sensitivity/Demand_Sensitivity.xlsx",
+    "interpretation": "Demand stress scenarios, not measured unmet demand."
+  }
 }

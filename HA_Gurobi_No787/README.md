@@ -99,6 +99,58 @@ Other findings:
 
 ## Options
 
+### Demand sensitivity: start with the baseline, then compare scenarios
+
+Do not change source PASSENGERS or manually fill the spill variable. The demand
+formula is `q = monthly route passengers / performed departures * phi`.
+The default remains phi=1; true unmet demand is not identified from carried
+passengers. Higher multipliers are explicit stress scenarios, not observations.
+
+Run one uniform demand scenario, for example +10%:
+
+```bash
+python run_model.py --demand-multiplier 1.10
+```
+
+The flag sets absolute phi for every retained route and takes precedence over
+JSON load-factor rules and route-specific values. It must be finite and >=1.
+The effective phi is recorded in the assignments, calculated inputs, parameters
+and run summary. It does not introduce time-of-day differences within a route.
+
+Run the four standard cases and create a comparison workbook:
+
+```bash
+python run_sensitivity.py
+```
+
+Open `results/sensitivity_<timestamp>/Demand_Sensitivity.xlsx`. Each case also
+has its own full Gurobi outputs and audit. For a different set of scenarios:
+
+```bash
+python run_sensitivity.py --factors 1 1.05 1.10 1.20
+```
+
+Recorded actual Gurobi results with unchanged fleet, costs and turns:
+
+| Uniform phi | Flights with spill | Estimated spilled passengers | Spill penalty USD | Total objective USD |
+|---|---:|---:|---:|---:|
+|1.00|0|0.00|0.00|3,201,237.68|
+|1.05|0|0.00|0.00|3,201,237.68|
+|1.10|18|86.66|16,770.41|3,218,008.08|
+|1.20|54|820.36|160,620.61|3,361,858.29|
+
+All four reached zero gap and passed operational checks. The spill-dollar
+amounts remain conditional on the cost-recovery proxy, not measured DB1B fares.
+The tests show sensitivity; they do not establish which demand multiplier is
+true. Report the baseline and scenarios together. Do not choose a multiplier
+merely to force positive spill. Real flight-level booking/denied-demand data
+would be needed for stronger calibration.
+
+JSON precedence is also corrected: an explicit `demand_adjustment` rule clears
+the automatically generated per-route phi=1 values. Explicit per-route values
+in the override still take precedence over that rule. The uniform CLI flag is
+applied last. Existing baseline results are unchanged.
+
 ```bash
 python run_model.py --validate-only
 python run_model.py --mode strict --validate-only
@@ -152,6 +204,10 @@ Exit codes 0/1/2/3 mean validated-or-feasible/error/missing-inputs/no-incumbent.
 ```bash
 python -m unittest -v test_prepare_data test_gurobi_model test_compact_model test_entrypoint
 ```
+
+Demand-control regression tests are in `test_demand_controls.py`; the full
+recorded suite including those tests has 36 passing tests. Actual comparison
+evidence is included under `validation/demand_sensitivity/`.
 
 Actual Gurobi evidence for this no-787 version is included in
 `validation/no787_gurobi/`. Estimated outputs remain conditional scenarios,

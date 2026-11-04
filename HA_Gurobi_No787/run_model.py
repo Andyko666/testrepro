@@ -10,6 +10,7 @@ import argparse
 from datetime import datetime, timezone
 import hashlib
 import json
+import math
 from pathlib import Path
 import sys
 
@@ -32,6 +33,11 @@ def merge_parameters(base, overrides):
     if unknown:
         raise ValueError(f"Unknown parameter keys: {sorted(unknown)}")
     result = json.loads(json.dumps(base))
+    if "demand_adjustment" in overrides:
+        # Generated per-route phi=1 values must not mask an explicitly supplied
+        # load-factor rule. Explicit route exceptions in this same override
+        # are merged below and still take precedence over that rule.
+        result["route_demand_multipliers"] = {}
     for key, value in overrides.items():
         if key in {"turnaround_minutes", "available_fleet", "cost_per_airborne_hour_overrides"} and isinstance(value, dict):
             unsupported = set(value) - {str(k) for k in TYPES}
@@ -41,6 +47,34 @@ def merge_parameters(base, overrides):
             result[key].update(value)
         else:
             result[key] = value
+    return result
+
+
+def demand_multiplier_argument(value):
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        raise argparse.ArgumentTypeError("Demand multiplier must be a finite number >=1.") from None
+    if not math.isfinite(number) or number < 1:
+        raise argparse.ArgumentTypeError("Demand multiplier must be a finite number >=1, as required by the PDF.")
+    return number
+
+
+def apply_uniform_demand_multiplier(parameters, workbook, multiplier):
+    """Set absolute phi uniformly; preserve source observations and other inputs.
+
+    This is demand sensitivity, not a statistically identified demand estimate.
+    It is applied last so no generated route phi can silently mask the CLI.
+    """
+    factor = demand_multiplier_argument(multiplier)
+    routes = pd.read_excel(workbook, sheet_name="Schedule_UTC")[["origin", "dest"]].drop_duplicates()
+    result = json.loads(json.dumps(parameters))
+    result["route_demand_multipliers"] = {
+        f"{r.origin}-{r.dest}": factor for r in routes.itertuples(index=False)
+    }
+    result.setdefault("estimation_metadata", {})["demand"] = (
+        f"Uniform phi={factor:g}: explicit stress scenario, not observed or identified true demand. "
+        "Applied after JSON/global rules to all retained routes.")
     return result
 
 
@@ -89,6 +123,14 @@ def write_report(output, preparation, result, mode):
                   "These are results under the documented inputs. Estimated spill and cost-based penalties do not establish actual lost passengers or fare revenue."]
     if result["status"] == "MISSING_INPUTS_NO_OPTIMIZATION":
         lines += ["", "Strict mode found missing parameters; see `missing_inputs.csv`. This is not mathematical infeasibility."]
+    demand_inputs = result.get("demand_inputs")
+    if demand_inputs:
+        lines += ["", "## Demand interpretation", "",
+                  f"Effective phi range: {demand_inputs['minimum_phi']:g} to {demand_inputs['maximum_phi']:g}.",
+                  "Demand = monthly route carried passengers / performed departures * phi. "
+                  "This is a conditional model estimate. Spill describes demand exceeding assigned seats, "
+                  "not measured overbooking or denied boarding. Demand increases are sensitivity scenarios, "
+                  "not evidence of actual lost customers."]
     lines += ["", "## Remaining limitations", "",
               "- The three source Excel files contain no DB1B observations. Any optional local fare import is recorded separately and takes precedence. For uncovered routes, estimated mode uses monthly air-operating cost divided by carried passengers as a cost-recovery spill penalty. This is NOT inferred DB1B fare and explicitly differs from that requested PDF input source.",
               "- Type889is excluded, so no787operating-cost proxy is calculated or used. Type837also remains outside the candidate set. Its source cost is preserved but unused.",
@@ -113,6 +155,8 @@ def main(argv=None):
     p.add_argument("--costs", type=Path, default=ROOT / "data/costs.xlsx")
     p.add_argument("--mode", choices=["estimated", "strict"], default="estimated")
     p.add_argument("--parameters", type=Path, help="Optional explicit JSON overrides; see parameters_example.json.")
+    p.add_argument("--demand-multiplier", type=demand_multiplier_argument,
+                   help="Absolute uniform phi >=1; applied last to all retained routes. 1.10 is a +10%% stress scenario, not measured demand.")
     p.add_argument("--fares", type=Path, help="Optional CSV with origin,dest,fare_usd; observed fares take precedence over proxies.")
     p.add_argument("--formulation", choices=["compact", "full"], default="compact")
     p.add_argument("--validate-only", action="store_true", help="Validate all inputs without importing Gurobi or optimizing.")
@@ -132,6 +176,8 @@ def main(argv=None):
         parameters = json.loads(generated.read_text()) if a.mode == "estimated" else {}
         if a.parameters:
             parameters = merge_parameters(parameters, json.loads(a.parameters.read_text()))
+        if a.demand_multiplier is not None:
+            parameters = apply_uniform_demand_multiplier(parameters, workbook, a.demand_multiplier)
         (output / "effective_parameters.json").write_text(json.dumps(parameters, indent=2, allow_nan=False)+"\n")
         fare_import = import_route_fares(workbook, a.fares) if a.fares else None
         print(f"Input mode: {a.mode}. See prepared audits for every observation, estimate and limitation.", flush=True)
@@ -146,6 +192,11 @@ def main(argv=None):
         observed = data["flights"].fare_source.eq("SUPPLIED_DIRECTIONAL_MARKET_FARE")
         penalty_inputs = dict(supplied_fare_routes=len(data["flights"].loc[observed,["origin","dest"]].drop_duplicates()),
                               proxy_penalty_routes=len(data["flights"].loc[~observed,["origin","dest"]].drop_duplicates()))
+        demand_inputs = dict(uniform_cli_phi=a.demand_multiplier,
+                             minimum_phi=float(data["flights"].phi.min()),
+                             maximum_phi=float(data["flights"].phi.max()),
+                             total_estimated_demand=float(data["flights"].demand.sum()),
+                             label="Scenario estimate; not observed true unmet demand or overbooking.")
         if data["balance"].net_departures.ne(0).any():
             print("WARNING: cyclic airport balance fails. Increasing aircraft counts cannot fix this scope conflict.", flush=True)
         if a.validate_only:
@@ -154,7 +205,7 @@ def main(argv=None):
             result = solve_gurobi(data, output, a.time_limit, a.mip_gap)
         result.update(mode=a.mode, preparation=preparation, parameters_file="effective_parameters.json",
                       prepared_workbook_sha256=hashlib.sha256(workbook.read_bytes()).hexdigest(),
-                      fare_import=fare_import, penalty_inputs=penalty_inputs)
+                      fare_import=fare_import, penalty_inputs=penalty_inputs, demand_inputs=demand_inputs)
         exit_code = 0 if a.validate_only or result.get("solution_count", 0) > 0 else 3
     except MissingInputs as exc:
         pd.DataFrame(exc.missing).to_csv(output / "missing_inputs.csv", index=False)

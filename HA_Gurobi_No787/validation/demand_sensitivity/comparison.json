@@ -1,0 +1,50 @@
+[
+  {
+    "demand_multiplier": 1.0,
+    "status": "OPTIMAL_WITHIN_CONFIGURED_TOLERANCE",
+    "objective_usd": 3201237.67558547,
+    "operating_cost_usd": 3201237.67558547,
+    "spill_cost_usd": 0.0,
+    "estimated_spilled_passengers": 0.0,
+    "mip_gap": 0.0,
+    "flights_with_spill": 0,
+    "case_directory": "case_01_phi_1",
+    "demand_interpretation": "Assumed demand stress, not observed true demand or actual denied boarding."
+  },
+  {
+    "demand_multiplier": 1.05,
+    "status": "OPTIMAL_WITHIN_CONFIGURED_TOLERANCE",
+    "objective_usd": 3201237.67558547,
+    "operating_cost_usd": 3201237.67558547,
+    "spill_cost_usd": 0.0,
+    "estimated_spilled_passengers": 0.0,
+    "mip_gap": 0.0,
+    "flights_with_spill": 0,
+    "case_directory": "case_02_phi_1.05",
+    "demand_interpretation": "Assumed demand stress, not observed true demand or actual denied boarding."
+  },
+  {
+    "demand_multiplier": 1.1,
+    "status": "OPTIMAL_WITHIN_CONFIGURED_TOLERANCE",
+    "objective_usd": 3218008.081802141,
+    "operating_cost_usd": 3201237.6755854706,
+    "spill_cost_usd": 16770.40621667001,
+    "estimated_spilled_passengers": 86.65680953166728,
+    "mip_gap": 0.0,
+    "flights_with_spill": 18,
+    "case_directory": "case_03_phi_1.1",
+    "demand_interpretation": "Assumed demand stress, not observed true demand or actual denied boarding."
+  },
+  {
+    "demand_multiplier": 1.2,
+    "status": "OPTIMAL_WITHIN_CONFIGURED_TOLERANCE",
+    "objective_usd": 3361858.286250919,
+    "operating_cost_usd": 3201237.67558547,
+    "spill_cost_usd": 160620.61066544853,
+    "estimated_spilled_passengers": 820.3597309070067,
+    "mip_gap": 0.0,
+    "flights_with_spill": 54,
+    "case_directory": "case_04_phi_1.2",
+    "demand_interpretation": "Assumed demand stress, not observed true demand or actual denied boarding."
+  }
+]
