@@ -1,0 +1,38 @@
+{
+  "package": "HA_Gurobi_No787_LF80_Code",
+  "variant": "CODE_ONLY_NO_SOURCE_DATA_OR_OPERATIONAL_RESULTS",
+  "primary_configuration_file": "primary_assumptions.json",
+  "primary_demand_rule": {
+    "load_factor_threshold": 0.8,
+    "comparison": ">",
+    "multiplier_above": 1.2,
+    "multiplier_below_or_equal": 1.0
+  },
+  "required_local_files": [
+    "data/on_time.xlsx",
+    "data/t100.xlsx",
+    "data/costs.xlsx"
+  ],
+  "code_sha256": {
+    ".gitignore": "525a9de42b4cf732f68b2bada8802a2e490bc16f77f8c0ac6fdbeee3120a7781",
+    "README.md": "16b813fc2b406b5ebb90e675b13a5befa8ef6bd648f54ce13e6f77dbcd66a1d9",
+    "START_HERE.md": "57ea00d5136f69005ff77b076e8afc23dc0e7c1ebc055ab9a8bf26fce1b19860",
+    "compact_model.py": "5e7349f37f8a8c6df9b7a2669ecf658b148e79fd51af634d9d0bd5098eb6f381",
+    "gurobi_model.py": "5afb30f155290e364f571001f24197f617135256ffcb13e241094c29b775acdf",
+    "parameters_example.json": "3a7e19ad615f10104346cc100c5f51a06483335942bfbec9b0d812bc8c931ac4",
+    "prepare_data.py": "fd8b9d118c7a5e351df7797f4c100986fea2e3a42bca55dd994f91a68589be98",
+    "primary_assumptions.json": "2b02f5b536ae614f98ed625317f98e36566764b52402ef645175420daf240d34",
+    "requirements.txt": "993c3a3d6116c0dac2e1dc070800421e36b7a1dca6c215834249124586f171f4",
+    "run_load_factor_comparison.py": "db69e1ad1b54a29c0c15780c9e4e6650e8bea5a3d2dc0b0057da5fd2c857c8b9",
+    "run_model.py": "fe803531d248c7c7d85ad8d5a88cc2b3fa61fd53e01ae477243299286310643f",
+    "run_sensitivity.py": "a4d86f16cc441e1e039b7b77b5ee689f1061e311548a1bf38d7baac89b69023a",
+    "run_windows.cmd": "cca1805f727ce9070a7d0f813743773f5a9fdbfea456b58b0befacb56dcd288a",
+    "test_compact_model.py": "b82452b5340fd2cb6844b0614d631c3b582610f850ebe6498346876fcc8338ac",
+    "test_demand_controls.py": "f1f335ffd1bc97c8a9a20d2bdfc730711a4a98d82adf87b446e9dd67e99f3a1f",
+    "test_entrypoint.py": "bc6525421dd1a420e95d1b23cd430002d63c94612715d03119332b5606c2a34b",
+    "test_gurobi_model.py": "93013f5156692d6dc2498d89fd0b3d1ec2f05e4449be5f9169e2548f421c9086",
+    "test_load_factor_rule.py": "7b63dc1a216b490fe24801f6ab5533d1e72ac4b793ec1bcd3cd1d1818e743734",
+    "test_prepare_data.py": "c6a8d72fdaa9c84fb86babc66620123f4ab68434c43fe54309ed1c2f6fc0f422",
+    "test_scenario_reporting.py": "571455774bbe473ba640d8e0dc9ff91ebd72113d9f4c9192ad75fc7dc1951c05"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "available_fleet": {
+    "608": 16,
+    "696": 16,
+    "721": 17
+  },
+  "turnaround_minutes": {
+    "608": 30,
+    "696": 100,
+    "721": 75
+  },
+  "demand_adjustment": {
+    "load_factor_threshold": 0.8,
+    "comparison": ">",
+    "multiplier_above": 1.2,
+    "multiplier_below_or_equal": 1.0
+  }
+}

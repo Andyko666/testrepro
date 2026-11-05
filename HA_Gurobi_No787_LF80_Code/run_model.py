@@ -1,0 +1,411 @@
+#!/usr/bin/env python3
+"""Run the supplied data with candidate types608/696/721 and no787 assignment.
+
+Default estimation is explicit and audited. No source workbook is modified.
+Use --mode strict to reject missing inputs instead of using scenario estimates.
+"""
+from __future__ import annotations
+
+import argparse
+from datetime import datetime, timezone
+import hashlib
+import json
+import math
+from pathlib import Path
+import sys
+
+import pandas as pd
+from openpyxl import load_workbook
+
+from prepare_data import prepare_data
+from gurobi_model import TYPES, FARE_COLUMN, MissingInputs, prepare_inputs, solve_gurobi
+
+ROOT = Path(__file__).resolve().parent
+PRIMARY_ASSUMPTIONS = ROOT / "primary_assumptions.json"
+ALLOWED_PARAMETERS = {"turnaround_minutes", "available_fleet", "cost_per_airborne_hour_overrides",
+                      "fare_proxy", "demand_adjustment", "route_demand_multipliers",
+                      "route_spill_penalty_estimates", "estimation_metadata"}
+
+
+def merge_parameters(base, overrides):
+    if not isinstance(overrides, dict):
+        raise ValueError("Parameter JSON must be an object.")
+    unknown = set(overrides) - ALLOWED_PARAMETERS
+    if unknown:
+        raise ValueError(f"Unknown parameter keys: {sorted(unknown)}")
+    result = json.loads(json.dumps(base))
+    if "demand_adjustment" in overrides:
+        # Generated per-route phi=1 values must not mask an explicitly supplied
+        # load-factor rule. Explicit route exceptions in this same override
+        # are merged below and still take precedence over that rule.
+        result["route_demand_multipliers"] = {}
+    for key, value in overrides.items():
+        if key == "demand_adjustment":
+            # A rule is atomic: mixing legacy >= keys with a primary strict >
+            # rule changes semantics and can preserve conflicting multipliers.
+            result[key] = json.loads(json.dumps(value))
+            continue
+        if key in {"turnaround_minutes", "available_fleet", "cost_per_airborne_hour_overrides"} and isinstance(value, dict):
+            unsupported = set(value) - {str(k) for k in TYPES}
+            if unsupported:
+                raise ValueError(f"{key} includes excluded/unknown aircraft types {sorted(unsupported)}; this project excludes787.")
+        if isinstance(value, dict) and isinstance(result.get(key), dict):
+            result[key].update(value)
+        else:
+            result[key] = value
+    return result
+
+
+def demand_multiplier_argument(value):
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        raise argparse.ArgumentTypeError("Demand multiplier must be a finite number >=1.") from None
+    if not math.isfinite(number) or number < 1:
+        raise argparse.ArgumentTypeError("Demand multiplier must be a finite number >=1, as required by the PDF.")
+    return number
+
+
+def load_factor_threshold_argument(value):
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        raise argparse.ArgumentTypeError("Historical load-factor threshold must be in [0,1].") from None
+    if isinstance(value, bool) or not math.isfinite(number) or not 0 <= number <= 1:
+        raise argparse.ArgumentTypeError("Historical load-factor threshold must be finite and in [0,1].")
+    return number
+
+
+def apply_load_factor_parameters(parameters, threshold, high_multiplier=1.20):
+    """Apply strict historical LF > threshold; other routes retain phi=1."""
+    cutoff = load_factor_threshold_argument(threshold)
+    high = demand_multiplier_argument(high_multiplier)
+    result = json.loads(json.dumps(parameters))
+    result["route_demand_multipliers"] = {}
+    result["demand_adjustment"] = dict(load_factor_threshold=cutoff, comparison=">",
+                                       multiplier_above=high, multiplier_below_or_equal=1.0)
+    result.setdefault("estimation_metadata", {})["demand"] = (
+        f"Historical directional-route LF > {cutoff:g}: phi={high:g}; LF <= {cutoff:g}: phi=1. "
+        "LF=sum historical passengers/sum historical seats before optimization. "
+        "This is a modeling assumption, not observed unmet demand; CLI rule overrides route exceptions.")
+    result["estimation_metadata"]["demand_formula"] = (
+        f"q_f=historical route passengers/performed departures * ({high:g} if LF>{cutoff:g}, otherwise1)")
+    return result
+
+
+def apply_uniform_demand_multiplier(parameters, workbook, multiplier):
+    """Set absolute phi uniformly; preserve source observations and other inputs.
+
+    This is demand sensitivity, not a statistically identified demand estimate.
+    It is applied last so no generated route phi can silently mask the CLI.
+    """
+    factor = demand_multiplier_argument(multiplier)
+    routes = pd.read_excel(workbook, sheet_name="Schedule_UTC")[["origin", "dest"]].drop_duplicates()
+    result = json.loads(json.dumps(parameters))
+    # The LF rule is inactive under a uniform override. Remove it so the saved
+    # parameters and report cannot suggest both rules governed the same solve.
+    result.pop("demand_adjustment", None)
+    result["route_demand_multipliers"] = {
+        f"{r.origin}-{r.dest}": factor for r in routes.itertuples(index=False)
+    }
+    result.setdefault("estimation_metadata", {})["demand"] = (
+        f"Uniform phi={factor:g}: explicit stress scenario, not observed or identified true demand. "
+        "Applied after JSON/global rules to all retained routes.")
+    result["estimation_metadata"]["demand_formula"] = (
+        f"q_f=historical route passengers/performed departures * {factor:g} on every retained route; uniform CLI override.")
+    return result
+
+
+def describe_effective_demand(parameters, uniform_cli_phi=None):
+    """Describe the effective inputs, after all JSON and CLI overrides."""
+    rule = parameters.get("demand_adjustment")
+    exceptions = parameters.get("route_demand_multipliers", {})
+    if uniform_cli_phi is not None:
+        factor = demand_multiplier_argument(uniform_cli_phi)
+        return dict(
+            scenario_id=f"uniform_phi_{factor:g}",
+            effective_control="UNIFORM_CLI_OVERRIDE",
+            rule_description=f"Uniform phi={factor:g} on every retained route; no load-factor condition is active.",
+            demand_formula=f"q_f = historical route passengers / performed departures * {factor:g}.",
+            load_factor_rule=None,
+        )
+    if rule is not None:
+        threshold = float(rule["load_factor_threshold"])
+        comparison = rule.get("comparison", ">=")
+        high = float(rule.get("multiplier_above", rule.get("multiplier_at_or_above")))
+        low = float(rule.get("multiplier_below_or_equal", rule.get("multiplier_below", 1.0)))
+        description = (f"Historical directional-route LF {comparison} {threshold:g}: "
+                       f"phi={high:g}; otherwise phi={low:g}.")
+        if exceptions:
+            description += f" Explicit route overrides take precedence on {len(exceptions)} configured routes."
+        return dict(
+            scenario_id=f"lf_{'gt' if comparison == '>' else 'ge'}_{threshold:g}_phi_{high:g}_otherwise_{low:g}"
+                        + ("_with_route_overrides" if exceptions else ""),
+            effective_control="HISTORICAL_LOAD_FACTOR_RULE_OR_EXPLICIT_ROUTE_OVERRIDES",
+            rule_description=description,
+            demand_formula=("q_f = historical route passengers / performed departures * phi_r; " + description),
+            load_factor_rule=rule,
+        )
+    return dict(
+        scenario_id="explicit_route_multipliers" if exceptions else "historical_mean_phi_1",
+        effective_control="EXPLICIT_ROUTE_MULTIPLIERS" if exceptions else "HISTORICAL_MEAN_BASELINE",
+        rule_description=(f"Explicit phi values on {len(exceptions)} configured routes; other routes use phi=1."
+                          if exceptions else "Historical mean carried passengers per departure; phi=1 on every route."),
+        demand_formula="q_f = historical route passengers / performed departures * phi_r; default phi_r=1 unless explicitly overridden.",
+        load_factor_rule=None,
+    )
+
+
+def import_route_fares(workbook, csv_path):
+    """Use locally provided positive directional fares; never guess USD units."""
+    fares = pd.read_csv(csv_path)
+    required = {"origin", "dest", "fare_usd"}
+    if not required <= set(fares):
+        raise ValueError("Fare CSV must contain origin,dest,fare_usd in USD per passenger.")
+    for column in ["origin", "dest"]:
+        fares[column] = fares[column].astype(str).str.strip().str.upper()
+    if fares.duplicated(["origin", "dest"]).any():
+        raise ValueError("Fare CSV must contain one row per directional route.")
+    if fares.fare_usd.isna().any() or not fares.fare_usd.map(lambda v: float(v) > 0 and float(v) < float('inf')).all():
+        raise ValueError("Fare CSV prices must be finite and positive.")
+    mapping = {(r.origin, r.dest): float(r.fare_usd) for r in fares.itertuples()}
+    w = load_workbook(workbook)
+    s = w["DB1B_Route_Inputs"]
+    header = {c.value: c.column for c in s[1]}
+    matched = 0
+    for row in range(2, s.max_row+1):
+        key = (s.cell(row,header["origin"]).value, s.cell(row,header["dest"]).value)
+        if key in mapping:
+            s.cell(row,header[FARE_COLUMN]).value = mapping[key]
+            matched += 1
+    w.save(workbook)
+    return dict(file=csv_path.name, sha256=hashlib.sha256(csv_path.read_bytes()).hexdigest(),
+                input_routes=len(fares), matched_routes=matched,
+                note="User-provided directional USD fares; source credibility/weighting is the user's responsibility.")
+
+
+def write_report(output, preparation, result, mode):
+    lines = ["# Hawaiian Airlines: Local Gurobi Run", "",
+             f"Outcome: **{result['status']}**.", "",
+             "The PDF content is the complete Milestone4 model, although the attachment filename says Milestone3.",
+             "At the user's request, candidate type889is excluded. Flights with no remaining historically eligible type are explicitly listed outside this run's model scope; other flights are retained.",
+             f"Input mode: **{mode}**. Source and estimate audits are in `prepared/`.", ""]
+    demand_inputs = result.get("demand_inputs")
+    if demand_inputs:
+        lines += ["## Effective demand scenario", "",
+                  f"Scenario: **{demand_inputs['scenario_id']}**.",
+                  demand_inputs["rule_description"],
+                  "Historical directional-route LF is monthly passengers / monthly seats, fixed before assignment. "
+                  "Thresholds and multipliers are modeling assumptions, not identified unmet demand. Source records are unchanged.",
+                  f"Primary JSON loaded before overrides: {bool(result.get('primary_assumptions_applied'))}. "
+                  f"Primary JSON demand rule remains effective without route exceptions: {bool(result.get('primary_demand_rule_is_effective'))}.", ""]
+    if "objective_usd" in result:
+        lines += ["| Metric | Value |", "|---|---:|",
+                  f"| Objective | USD {result['objective_usd']:,.2f} |",
+                  f"| Operating expense | USD {result['operating_cost_usd']:,.2f} |",
+                  f"| Spill penalty | USD {result['spill_cost_usd']:,.2f} |",
+                  f"| Estimated spill variable | {result['model_spilled_passengers']:,.4f} |",
+                  f"| MIP gap | {result['mip_gap']:.6%} |",
+                  f"| Model variables / constraints | {result['variables']} / {result['constraints']} |", "",
+                  "These are results under the documented inputs. Estimated spill and cost-based penalties do not establish actual lost passengers or fare revenue."]
+    if result["status"] == "MISSING_INPUTS_NO_OPTIMIZATION":
+        lines += ["", "Strict mode found missing parameters; see `missing_inputs.csv`. This is not mathematical infeasibility."]
+    if demand_inputs:
+        lines += ["", "## Demand interpretation", "",
+                  f"Effective phi range: {demand_inputs['minimum_phi']:g} to {demand_inputs['maximum_phi']:g}.",
+                  f"Effective control: {demand_inputs.get('effective_control')}. Active LF rule: {json.dumps(demand_inputs.get('load_factor_rule'))}.",
+                  f"Actual uplifted routes/flights: {demand_inputs.get('uplifted_routes')} / {demand_inputs.get('uplifted_flights')}.",
+                  "Demand = monthly route carried passengers / performed departures * phi. "
+                  "This is a conditional model estimate. Spill describes demand exceeding assigned seats, "
+                  "not measured overbooking or denied boarding. Demand increases are sensitivity scenarios, "
+                  "not evidence of actual lost customers."]
+    lines += ["", "## Remaining limitations", "",
+              "- The three source Excel files contain no DB1B observations. Any optional local fare import is recorded separately and takes precedence. For uncovered routes, estimated mode uses monthly air-operating cost divided by carried passengers as a cost-recovery spill penalty. This is NOT inferred DB1B fare and explicitly differs from that requested PDF input source.",
+              "- Type889is excluded, so no787operating-cost proxy is calculated or used. Type837also remains outside the candidate set. Its source cost is preserved but unused.",
+              "- Turnaround proxies for608/696/721use the lower tail of positive scheduled ground dwells; dwell includes idle time and is not an approved operational minimum.",
+              "- Available-fleet estimates use observed tails and route/type compatibility. Ambiguous types, maintenance, spares, and international commitments remain uncertain. No FAA verification is invented.",
+              "- Demand and route airborne hours retain all historical aircraft observations, including787on retained routes. Removing an assignment option does not remove those passengers. Spill-penalty calibration uses only candidate aircraft with supplied costs, so no787cost is needed.",
+              "- Demand is the PDF passengers/departures estimate multiplied by the effective phi reported above. Monthly carried passengers do not identify unmet demand or flight-level peaks.",
+              "- Ten monthly rows have scheduled departures0but performed departures>0. They are flagged and retained, not presumed wrong. All ratios use performed departures.",
+              "- HNL-LAX/type696has two nonidentical rows. They are summed, not deleted as duplicates.",
+              "- One planned ground overlap is flagged and excluded from positive-dwell estimates; original timestamps are preserved.",
+              "- UTC conversions retain dates, use IANA time zones including Phoenix's no-DST rule, and reconcile destination clocks.", "",
+              "## PDF-equivalent compact formulation", "",
+              "Default compact mode removes equal ground-inventory variables at non-events and enforces the fleet cap at one time cut per type, since total fleet is conserved by flow. Every returned solution is then checked at ALL common PDF events. Use `--formulation full` for the literal shared-event formulation.",
+              "A compact model keeps the same optimal flight assignments/objective while avoiding unnecessary model size; a size-limited Gurobi license may be sufficient for this dataset. Licensing behavior depends on the installed version and license.", ""]
+    (output / "RUN_REPORT.md").write_text("\n".join(lines), encoding="utf-8")
+    result_excel = output / "gurobi_results.xlsx"
+    if result_excel.exists():
+        # Keep the chosen assumption and actual solver status inside the file
+        # users open first, instead of requiring them to infer either from costs.
+        from openpyxl.styles import Font, PatternFill
+        keys = ["status", "gurobi_version", "formulation", "retained_flights", "objective_usd",
+                "operating_cost_usd", "spill_cost_usd", "model_spilled_passengers", "mip_gap",
+                "dual_bound_usd", "runtime_seconds", "primary_assumptions_applied", "primary_assumptions_file",
+                "primary_demand_rule_is_effective"]
+        summary_rows = [(key, result.get(key)) for key in keys]
+        demand = result.get("demand_inputs", {})
+        rule = demand.get("load_factor_rule") or {}
+        summary_rows += [("scenario_id", demand.get("scenario_id")),
+                         ("effective_demand_rule", demand.get("rule_description")),
+                         ("load_factor_threshold", rule.get("load_factor_threshold")),
+                         ("load_factor_comparison", rule.get("comparison", ">=") if rule else None),
+                         ("multiplier_above", rule.get("multiplier_above", rule.get("multiplier_at_or_above"))),
+                         ("multiplier_below_or_equal", rule.get("multiplier_below_or_equal", rule.get("multiplier_below"))),
+                         ("uniform_cli_phi", demand.get("uniform_cli_phi")),
+                         ("minimum_phi", result.get("demand_inputs", {}).get("minimum_phi")),
+                         ("maximum_phi", result.get("demand_inputs", {}).get("maximum_phi")),
+                         ("uplifted_routes", result.get("demand_inputs", {}).get("uplifted_routes")),
+                         ("uplifted_flights", result.get("demand_inputs", {}).get("uplifted_flights")),
+                         ("effective_demand_control", result.get("demand_inputs", {}).get("effective_control"))]
+        assumptions = result.get("parameters", {}).get("estimation_metadata", {})
+        assumption_rows = [(key, str(value)) for key, value in assumptions.items()]
+        assumption_rows += [("Interpretation", "Demand uplift and resulting spill are conditional model estimates, not observed bookings, denied boarding, or actual lost revenue.")]
+        with pd.ExcelWriter(result_excel, engine="openpyxl", mode="a", if_sheet_exists="replace") as writer:
+            tables = {"Run_Summary":pd.DataFrame(summary_rows,columns=["metric","value"]),
+                      "Model_Assumptions":pd.DataFrame(assumption_rows,columns=["assumption","description"])}
+            if (output / "demand_rule_audit.csv").exists():
+                tables["Demand_Rule_Audit"] = pd.read_csv(output / "demand_rule_audit.csv")
+            for name, frame in tables.items():
+                frame.to_excel(writer,sheet_name=name,index=False)
+                sheet = writer.sheets[name]
+                sheet.freeze_panes = "A2"
+                sheet.column_dimensions["A"].width = 35
+                sheet.column_dimensions["B"].width = 90
+                for row in sheet:
+                    for cell in row:
+                        cell.font = Font(name="Calibri",size=11,color="000000",bold=cell.row==1)
+                        cell.fill = PatternFill(fill_type=None)
+                for column in sheet.iter_cols():
+                    if column[0].value == "historical_load_factor":
+                        for cell in column[1:]: cell.number_format = "0.00%"
+                    elif column[0].value == "phi":
+                        for cell in column[1:]: cell.number_format = "0.00"
+
+
+def main(argv=None):
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--on-time", type=Path, default=ROOT / "data/on_time.xlsx")
+    p.add_argument("--t100", type=Path, default=ROOT / "data/t100.xlsx")
+    p.add_argument("--costs", type=Path, default=ROOT / "data/costs.xlsx")
+    p.add_argument("--mode", choices=["estimated", "strict"], default="estimated")
+    p.add_argument("--parameters", type=Path, help="Optional explicit JSON overrides; see parameters_example.json.")
+    demand_group = p.add_mutually_exclusive_group()
+    demand_group.add_argument("--demand-multiplier", type=demand_multiplier_argument,
+                   help="Absolute uniform phi >=1; applied last to all retained routes. 1.10 is a +10%% stress scenario, not measured demand.")
+    demand_group.add_argument("--load-factor-threshold", type=load_factor_threshold_argument,
+                              help="Strict historical route LF > threshold receives uplift; other routes use phi=1.")
+    p.add_argument("--high-load-multiplier", type=demand_multiplier_argument,
+                   help="Uplift for --load-factor-threshold; defaults to1.20. Requires that threshold flag.")
+    p.add_argument("--fares", type=Path, help="Optional CSV with origin,dest,fare_usd; observed fares take precedence over proxies.")
+    p.add_argument("--formulation", choices=["compact", "full"], default="compact")
+    p.add_argument("--validate-only", action="store_true", help="Validate all inputs without importing Gurobi or optimizing.")
+    p.add_argument("--time-limit", type=float, default=300)
+    p.add_argument("--mip-gap", type=float, default=0.0001)
+    p.add_argument("--output", type=Path, help="New output directory; default is results/<UTC timestamp>.")
+    a = p.parse_args(argv)
+    if a.high_load_multiplier is not None and a.load_factor_threshold is None:
+        p.error("--high-load-multiplier requires --load-factor-threshold.")
+    output = a.output or ROOT / "results" / datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f_UTC")
+    if output.exists() and any(output.iterdir()):
+        print(f"Choose a new output directory; refusing to mix results with existing files: {output}", file=sys.stderr)
+        return 1
+    output.mkdir(parents=True, exist_ok=True)
+    preparation = {}
+    primary_applied = False
+    primary_rule = None
+    try:
+        print("Preparing the supplied three Excel files; originals remain unchanged.", flush=True)
+        workbook, generated, preparation = prepare_data(a.on_time, a.t100, a.costs, output / "prepared")
+        parameters = json.loads(generated.read_text()) if a.mode == "estimated" else {}
+        if a.mode == "estimated" and PRIMARY_ASSUMPTIONS.exists():
+            primary_parameters = json.loads(PRIMARY_ASSUMPTIONS.read_text())
+            parameters = merge_parameters(parameters, primary_parameters)
+            primary_rule = primary_parameters.get("demand_adjustment")
+            primary_applied = True
+        if a.parameters:
+            parameters = merge_parameters(parameters, json.loads(a.parameters.read_text()))
+        if a.demand_multiplier is not None:
+            parameters = apply_uniform_demand_multiplier(parameters, workbook, a.demand_multiplier)
+            print("Uniform demand override active: the load-factor condition is bypassed for every route.", flush=True)
+        elif a.load_factor_threshold is not None:
+            parameters = apply_load_factor_parameters(parameters,a.load_factor_threshold,
+                                                     a.high_load_multiplier if a.high_load_multiplier is not None else 1.20)
+        demand_context = describe_effective_demand(parameters, a.demand_multiplier)
+        if a.mode == "estimated" or parameters:
+            parameters.setdefault("estimation_metadata", {})["demand"] = demand_context["rule_description"]
+            parameters["estimation_metadata"]["demand_formula"] = demand_context["demand_formula"]
+        (output / "effective_parameters.json").write_text(json.dumps(parameters, indent=2, allow_nan=False)+"\n")
+        fare_import = import_route_fares(workbook, a.fares) if a.fares else None
+        print(f"Input mode: {a.mode}. See prepared audits for every observation, estimate and limitation.", flush=True)
+        data = prepare_inputs(workbook, parameters)
+        data["formulation"] = a.formulation
+        data["flights"].to_csv(output / "calculated_flight_parameters.csv", index=False)
+        data["aircraft"].to_csv(output / "effective_aircraft_parameters.csv")
+        data["audit"].to_csv(output / "parameter_provenance.csv", index=False)
+        data["balance"].to_csv(output / "airport_balance.csv", index=False)
+        demand_audit = data["flights"].groupby(["origin","dest"],as_index=False).agg(
+            historical_passengers_per_departure=("observed_passengers_per_departure","first"),
+            historical_load_factor=("historical_load_factor","first"),
+            phi=("phi","first"),estimated_demand=("demand","first"),scheduled_flights=("flight_id","size"))
+        demand_audit["demand_uplift_applied"] = demand_audit.phi.gt(1)
+        demand_audit.to_csv(output / "demand_rule_audit.csv",index=False)
+        counts = dict(flights=len(data["flights"]), airports=len(data["airports"]),
+                      eligible_pairs=len(data["pairs"]), common_events=len(data["events"]))
+        observed = data["flights"].fare_source.eq("SUPPLIED_DIRECTIONAL_MARKET_FARE")
+        penalty_inputs = dict(supplied_fare_routes=len(data["flights"].loc[observed,["origin","dest"]].drop_duplicates()),
+                              proxy_penalty_routes=len(data["flights"].loc[~observed,["origin","dest"]].drop_duplicates()))
+        demand_inputs = dict(uniform_cli_phi=a.demand_multiplier,
+                             threshold_cli=a.load_factor_threshold,
+                             **demand_context,
+                             historical_load_factor_min=float(data["flights"].historical_load_factor.min()),
+                             historical_load_factor_max=float(data["flights"].historical_load_factor.max()),
+                             uplifted_routes=int(demand_audit.demand_uplift_applied.sum()),
+                             uplifted_flights=int(data["flights"].phi.gt(1).sum()),
+                             minimum_phi=float(data["flights"].phi.min()),
+                             maximum_phi=float(data["flights"].phi.max()),
+                             total_estimated_demand=float(data["flights"].demand.sum()),
+                             label="Scenario estimate; not observed true unmet demand or overbooking.")
+        print(f"Effective demand phi: {demand_inputs['minimum_phi']:g} to {demand_inputs['maximum_phi']:g}. "
+              "The uplift is a model assumption, not observed unmet demand.", flush=True)
+        if data["balance"].net_departures.ne(0).any():
+            print("WARNING: cyclic airport balance fails. Increasing aircraft counts cannot fix this scope conflict.", flush=True)
+        if a.validate_only:
+            result = dict(status="INPUTS_VALIDATED_NO_OPTIMIZATION", **counts)
+        else:
+            result = solve_gurobi(data, output, a.time_limit, a.mip_gap)
+        result.update(mode=a.mode, preparation=preparation, parameters_file="effective_parameters.json",
+                      primary_assumptions_applied=primary_applied,
+                      primary_demand_rule_is_effective=bool(primary_applied and primary_rule is not None
+                          and parameters.get("demand_adjustment") == primary_rule
+                          and not parameters.get("route_demand_multipliers")
+                          and a.demand_multiplier is None),
+                      primary_assumptions_file=PRIMARY_ASSUMPTIONS.name if primary_applied else None,
+                      primary_assumptions_sha256=hashlib.sha256(PRIMARY_ASSUMPTIONS.read_bytes()).hexdigest() if primary_applied else None,
+                      prepared_workbook_sha256=hashlib.sha256(workbook.read_bytes()).hexdigest(),
+                      fare_import=fare_import, penalty_inputs=penalty_inputs, demand_inputs=demand_inputs)
+        exit_code = 0 if a.validate_only or result.get("solution_count", 0) > 0 else 3
+    except MissingInputs as exc:
+        pd.DataFrame(exc.missing).to_csv(output / "missing_inputs.csv", index=False)
+        result = dict(status="MISSING_INPUTS_NO_OPTIMIZATION", missing_count=len(exc.missing),
+                      message=str(exc), preparation=preparation, primary_assumptions_applied=primary_applied,
+                      primary_assumptions_file=PRIMARY_ASSUMPTIONS.name if primary_applied else None)
+        exit_code = 2
+    except Exception as exc:
+        result = dict(status="EXECUTION_ERROR_NO_COMPLETED_RESULT", error_type=type(exc).__name__,
+                      message=str(exc), preparation=preparation, primary_assumptions_applied=primary_applied,
+                      primary_assumptions_file=PRIMARY_ASSUMPTIONS.name if primary_applied else None)
+        exit_code = 1
+    (output / "run_summary.json").write_text(json.dumps(result, indent=2, allow_nan=False)+"\n")
+    write_report(output, preparation, result, a.mode)
+    print(f"Status: {result['status']}")
+    if "objective_usd" in result:
+        print(f"Objective: USD {result['objective_usd']:,.2f}; MIP gap: {result['mip_gap']:.6%}")
+    if "message" in result:
+        print(result["message"])
+    print(f"Output: {output.resolve()}")
+    return exit_code
+
+
+if __name__ == "__main__":
+    sys.exit(main())
